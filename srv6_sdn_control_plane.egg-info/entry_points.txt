@@ -1,3 +1,0 @@
-[console_scripts]
-srv6_controller = srv6_sdn_control_plane.srv6_controller:_main
-

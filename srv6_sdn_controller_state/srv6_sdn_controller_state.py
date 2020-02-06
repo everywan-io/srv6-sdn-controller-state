@@ -18,7 +18,7 @@ DEFAULT_MONGODB_USERNAME = 'root'
 DEFAULT_MONGODB_PASSWORD = '12345678'
 
 # Set logging level
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 
 # Get a reference to the MongoDB client
@@ -63,9 +63,9 @@ def register_device(deviceid, features, interfaces, mgmtip,
     # Get the devices collection
     devices = db.devices
     # Add the device to the collection
-    logging.info('Registering device on DB: %s' % device)
+    logging.debug('Registering device on DB: %s' % device)
     devices.insert_one(device)
-    logging.info('Device successfully registered')
+    logging.debug('Device successfully registered')
 
 
 # Unregister a device
@@ -79,9 +79,9 @@ def unregister_device(deviceid):
     # Get the devices collection
     devices = db.devices
     # Delete the device from the collection
-    logging.info('Unregistering device: %s' % deviceid)
+    logging.debug('Unregistering device: %s' % deviceid)
     devices.delete_one(device)
-    logging.info('Device successfully unregistered')
+    logging.debug('Device successfully unregistered')
 
 
 # Unregister all devices
@@ -95,9 +95,9 @@ def unregister_devices_by_tenantid(tenantid):
     # Get the devices collection
     devices = db.devices
     # Delete all the devices in the collection
-    logging.info('Unregistering all the devices of the tenant %s' % tenantid)
+    logging.debug('Unregistering all the devices of the tenant %s' % tenantid)
     devices.delete_many(device)
-    logging.info('Devices successfully unregistered')
+    logging.debug('Devices successfully unregistered')
 
 
 # Unregister all devices
@@ -109,9 +109,9 @@ def unregister_all_devices(deviceid):
     # Get the devices collection
     devices = db.devices
     # Delete all the devices in the collection
-    logging.info('Unregistering all devices')
+    logging.debug('Unregistering all devices')
     devices.delete_many({})
-    logging.info('Devices successfully unregistered')
+    logging.debug('Devices successfully unregistered')
 
 
 # Get devices
@@ -121,7 +121,7 @@ def get_devices(deviceids=None, tenantid=None, return_dict=False):
     if tenantid is not None:
         query['tenantid'] = tenantid
     if deviceids is not None:
-        query['deviceid'] = {'$in': deviceids}
+        query['deviceid'] = {'$in': list(deviceids)}
     # Get a reference to the MongoDB client
     client = get_mongodb_session()
     # Get the database
@@ -129,7 +129,7 @@ def get_devices(deviceids=None, tenantid=None, return_dict=False):
     # Get the devices collection
     devices = db.devices
     # Find the device by device ID
-    logging.info('Retrieving devices by tenant ID %s' % tenantid)
+    logging.debug('Retrieving devices by tenant ID %s' % tenantid)
     devices = devices.find(query)
     if return_dict:
         _devices = dict()
@@ -137,8 +137,8 @@ def get_devices(deviceids=None, tenantid=None, return_dict=False):
             _devices[device['deviceid']] = device
         devices = _devices
     else:
-        devices = list(devices)    
-    logging.info('Devices found: %s' % devices)
+        devices = list(devices)
+    logging.debug('Devices found: %s' % devices)
     return devices
 
 
@@ -154,12 +154,12 @@ def device_exists(deviceid):
     # Get the devices collection
     devices = db.devices
     # Count the devices with the given device ID
-    logging.info('Searching the device %s' % deviceid)
+    logging.debug('Searching the device %s' % deviceid)
     if devices.count_documents(device, limit=1):
-        logging.info('The device exists')
+        logging.debug('The device exists')
         return True
     else:
-        logging.info('The device does not exist')
+        logging.debug('The device does not exist')
         return False
 
 
@@ -175,12 +175,12 @@ def is_device_running(deviceid):
     # Get the devices collection
     devices = db.devices
     # Count the devices with the given device ID
-    logging.info('Searching the device %s' % deviceid)
+    logging.debug('Searching the device %s' % deviceid)
     if devices.count_documents(device, limit=1):
-        logging.info('The device is running')
+        logging.debug('The device is running')
         return True
     else:
-        logging.info('The device is not running')
+        logging.debug('The device is not running')
         return False
 
 
@@ -202,12 +202,12 @@ def is_device_connected(deviceid):
     # Get the devices collection
     devices = db.devices
     # Count the devices with the given device ID
-    logging.info('Searching the device %s' % deviceid)
+    logging.debug('Searching the device %s' % deviceid)
     if devices.count_documents(device, limit=1):
-        logging.info('The device is connected')
+        logging.debug('The device is connected')
         return True
     else:
-        logging.info('The device is not connected')
+        logging.debug('The device is not connected')
         return False
 
 
@@ -226,13 +226,13 @@ def interface_exists_on_device(deviceid, interface_name):
     # Get the devices collection
     devices = db.devices
     # Count the interfaces with the given name
-    logging.info('Searching the interface %s on device %s' %
+    logging.debug('Searching the interface %s on device %s' %
                  (interface_name, deviceid))
     if devices.count_documents(device, limit=1):
-        logging.info('The interface exists')
+        logging.debug('The interface exists')
         return True
     else:
-        logging.info('The interface does not exist')
+        logging.debug('The interface does not exist')
         return False
 
 
@@ -247,9 +247,9 @@ def get_interfaces(deviceid):
     # Get the devices collection
     devices = db.devices
     # Count the interfaces with the given name
-    logging.info('Getting the interfaces of device %s' % deviceid)
+    logging.debug('Getting the interfaces of device %s' % deviceid)
     interfaces = devices.find_one(device, {'interfaces': 1})
-    logging.info('Interfaces found: %s' % interfaces)
+    logging.debug('Interfaces found: %s' % interfaces)
     return interfaces
 
 
@@ -264,10 +264,10 @@ def get_ipv4_addresses(deviceid, interface_name):
     # Get the devices collection
     devices = db.devices
     # Find the IPv4 addresses by device ID and interface
-    logging.info('Retrieving IPv4 addresses for device %s' % deviceid)
+    logging.debug('Retrieving IPv4 addresses for device %s' % deviceid)
     addrs = devices.find_one(device, {'interfaces': 1})
     addrs = addrs['interfaces'][interface_name]['ipv4_addrs']
-    logging.info('IPv4 addresses: %s' % addrs)
+    logging.debug('IPv4 addresses: %s' % addrs)
     return addrs
 
 
@@ -282,10 +282,10 @@ def get_ipv6_addresses(deviceid, interface_name):
     # Get the devices collection
     devices = db.devices
     # Find the IPv6 addresses by device ID and interface
-    logging.info('Retrieving IPv6 addresses for device %s' % deviceid)
+    logging.debug('Retrieving IPv6 addresses for device %s' % deviceid)
     addrs = devices.find_one(device, {'interfaces': 1})
     addrs = addrs['interfaces'][interface_name]['ipv6_addrs']
-    logging.info('IPv6 addresses: %s' % addrs)
+    logging.debug('IPv6 addresses: %s' % addrs)
     return addrs
 
 
@@ -300,11 +300,11 @@ def get_ip_addresses(deviceid, interface_name):
     # Get the devices collection
     devices = db.devices
     # Find the IPv4 addresses by device ID and interface
-    logging.info('Retrieving IPv4 addresses for device %s' % deviceid)
+    logging.debug('Retrieving IPv4 addresses for device %s' % deviceid)
     addrs = devices.find_one(device, {'interfaces': 1})
     addrs = addrs['interfaces'][interface_name]['ipv4_addrs'] + \
         addrs['interfaces'][interface_name]['ipv6_addrs']
-    logging.info('IPv4 addresses: %s' % addrs)
+    logging.debug('IPv4 addresses: %s' % addrs)
     return addrs
 
 
@@ -319,10 +319,10 @@ def get_ext_ipv4_addresses(deviceid, interface_name):
     # Get the devices collection
     devices = db.devices
     # Find the IPv4 addresses by device ID and interface
-    logging.info('Retrieving IPv4 addresses for device %s' % deviceid)
+    logging.debug('Retrieving IPv4 addresses for device %s' % deviceid)
     addrs = devices.find_one(device, {'interfaces': 1})
     addrs = addrs['interfaces'][interface_name]['ext_ipv4_addrs']
-    logging.info('IPv4 addresses: %s' % addrs)
+    logging.debug('IPv4 addresses: %s' % addrs)
     return addrs
 
 
@@ -337,10 +337,10 @@ def get_ext_ipv6_addresses(deviceid, interface_name):
     # Get the devices collection
     devices = db.devices
     # Find the IPv6 addresses by device ID and interface
-    logging.info('Retrieving IPv6 addresses for device %s' % deviceid)
+    logging.debug('Retrieving IPv6 addresses for device %s' % deviceid)
     addrs = devices.find_one(device, {'interfaces': 1})
     addrs = addrs['interfaces'][interface_name]['ext_ipv6_addrs']
-    logging.info('IPv6 addresses: %s' % addrs)
+    logging.debug('IPv6 addresses: %s' % addrs)
     return addrs
 
 
@@ -355,11 +355,11 @@ def get_ext_ip_addresses(deviceid, interface_name):
     # Get the devices collection
     devices = db.devices
     # Find the IPv4 addresses by device ID and interface
-    logging.info('Retrieving IPv4 addresses for device %s' % deviceid)
+    logging.debug('Retrieving IPv4 addresses for device %s' % deviceid)
     addrs = devices.find_one(device, {'interfaces': 1})
     addrs = addrs['interfaces'][interface_name]['ext_ipv4_addrs'] + \
         addrs['interfaces'][interface_name]['ext_ipv6_addrs']
-    logging.info('IPv4 addresses: %s' % addrs)
+    logging.debug('IPv4 addresses: %s' % addrs)
     return addrs
 
 
@@ -374,10 +374,10 @@ def get_ipv4_subnets(deviceid, interface_name):
     # Get the devices collection
     devices = db.devices
     # Find the IPv4 subnets by device ID and interface
-    logging.info('Retrieving IPv4 subnets for device %s' % deviceid)
+    logging.debug('Retrieving IPv4 subnets for device %s' % deviceid)
     subnets = devices.find_one(device, {'interfaces': 1})
     subnets = subnets['interfaces'][interface_name]['ipv4_subnets']
-    logging.info('IPv4 subnets: %s' % subnets)
+    logging.debug('IPv4 subnets: %s' % subnets)
     return subnets
 
 
@@ -392,10 +392,10 @@ def get_ipv6_subnets(deviceid, interface_name):
     # Get the devices collection
     devices = db.devices
     # Find the IPv6 subnets by device ID and interface
-    logging.info('Retrieving IPv6 subnets for device %s' % deviceid)
+    logging.debug('Retrieving IPv6 subnets for device %s' % deviceid)
     subnets = devices.find_one(device, {'interfaces': 1})
     subnets = subnets['interfaces'][interface_name]['ipv6_subnets']
-    logging.info('IPv6 subnets: %s' % subnets)
+    logging.debug('IPv6 subnets: %s' % subnets)
     return subnets
 
 
@@ -410,11 +410,11 @@ def get_ip_subnets(deviceid, interface_name):
     # Get the devices collection
     devices = db.devices
     # Find the subnets by device ID and interface
-    logging.info('Retrieving subnets for device %s' % deviceid)
+    logging.debug('Retrieving subnets for device %s' % deviceid)
     subnets = devices.find_one(device, {'interfaces': 1})
     subnets = subnets['interfaces'][interface_name]['ipv4_subnets'] + \
         subnets['interfaces'][interface_name]['ipv6_subnets']
-    logging.info('Subnets: %s' % subnets)
+    logging.debug('Subnets: %s' % subnets)
     return subnets
 
 
@@ -453,9 +453,9 @@ def get_router_mgmtip(deviceid):
     # Get the devices collection
     devices = db.devices
     # Find the IPv6 addresses by device ID and interface
-    logging.info('Retrieving management IP for device %s' % deviceid)
+    logging.debug('Retrieving management IP for device %s' % deviceid)
     mgmtip = devices.find_one(device, {'mgmtip': 1})['mgmtip']
-    logging.info('Management IP: %s' % mgmtip)
+    logging.debug('Management IP: %s' % mgmtip)
     return mgmtip
 
 
@@ -499,29 +499,31 @@ def get_non_loopback_interfaces(deviceid):
 
 
 # Configure the devices
-def configure_devices(devices):
-    deviceids = [{'deviceid': device['deviceid']} for device in devices]
-    
-    # Build the query
-    query = []
+def configure_devices(devices):    
+    # Build the update statements
+    queries = []
+    updates = []
     for device in devices:
         deviceid = device['deviceid']
-        _interfaces = dict()
         interfaces = device['interfaces']
         for interface in interfaces.values():
             interface_name = interface['name']
             ipv4_addrs = interface['ipv4_addrs']
             ipv6_addrs = interface['ipv6_addrs']
+            ipv4_subnets = interface['ipv4_subnets']
+            ipv6_subnets = interface['ipv6_subnets']
             type = interface['type']
-        query.append({
-            'deviceid': deviceid,
-            'interfaces': {interface_name: {
-                'ipv4_addrs': {'$set': ipv4_addrs},
-                'ipv6_addrs': {'$set': ipv6_addrs},
-                'type': {'$set': type},
-                'status': {'$set': utils.DeviceStatus.RUNNING}
-            }}
-        })
+            updates.append({
+                '$set': {
+                'interfaces.' + interface_name + '.ipv4_addrs': ipv4_addrs,
+                'interfaces.' + interface_name + '.ipv6_addrs': ipv6_addrs,
+                'interfaces.' + interface_name + '.ipv4_subnets': ipv4_subnets,
+                'interfaces.' + interface_name + '.ipv6_subnets': ipv6_subnets,
+                'interfaces.' + interface_name + '.type': type,
+                'status': utils.DeviceStatus.RUNNING
+                }
+            })
+            queries.append({'deviceid': deviceid})
     #query = {'$or': query}
     # Get a reference to the MongoDB client
     client = get_mongodb_session()
@@ -530,9 +532,10 @@ def configure_devices(devices):
     # Get the devices collection
     devices = db.devices
     # Count the interfaces with the given name
-    logging.info('Updating interfaces')
-    devices.update_many(deviceids, query)
-    logging.info('Interfaces updated')
+    logging.debug('Updating interfaces')
+    for query, update in zip(queries, updates):
+        devices.update_one(query, update)
+    logging.debug('Interfaces updated')
 
 
 ''' Overlay management '''
@@ -555,9 +558,9 @@ def create_overlay(name, type, _slices, tenantid, tunnel_mode):
     # Get the overlays collection
     overlays = db.overlays
     # Add the overlay to the collection
-    logging.info('Creating the overlay: %s' % overlay)
+    logging.debug('Creating the overlay: %s' % overlay)
     overlays.insert_one(overlay)
-    logging.info('Overlay created successfully')
+    logging.debug('Overlay created successfully')
 
 
 # Remove overlay by ID
@@ -571,9 +574,9 @@ def remove_overlay(overlayid):
     # Get the overlays collection
     overlays = db.overlays
     # Remove the overlay from the collection
-    logging.info('Removing the overlay: %s' % overlayid)
+    logging.debug('Removing the overlay: %s' % overlayid)
     overlays.delete_one(overlay)
-    logging.info('Overlay removed successfully')
+    logging.debug('Overlay removed successfully')
 
 
 # Remove all the overlays
@@ -585,9 +588,9 @@ def remove_all_overlays():
     # Get the overlays collection
     overlays = db.overlays
     # Delete all the overlays in the collection
-    logging.info('Removing all overlays')
+    logging.debug('Removing all overlays')
     overlays.delete_many({})
-    logging.info('Overlays removed successfully')
+    logging.debug('Overlays removed successfully')
 
 
 # Remove all the overlays of a tenant
@@ -601,9 +604,9 @@ def remove_overlays_by_tenantid(tenantid):
     # Get the overlays collection
     overlays = db.overlays
     # Delete all the overlays in the collection
-    logging.info('Removing all overlays of tenant: %s' % tenantid)
+    logging.debug('Removing all overlays of tenant: %s' % tenantid)
     overlays.delete_many(overlay)
-    logging.info('Overlays removed successfully')
+    logging.debug('Overlays removed successfully')
 
 
 # Get overlays
@@ -621,9 +624,9 @@ def get_overlays(overlayids=None, tenantid=None):
     # Get the overlays collection
     overlays = db.overlays
     # Find the device by device ID
-    logging.info('Retrieving overlays by tenant ID %s' % tenantid)
-    overlays = overlays.find(query)
-    logging.info('Overlays found: %s' % overlays)
+    logging.debug('Retrieving overlays by tenant ID %s' % tenantid)
+    overlays = list(overlays.find(query))
+    logging.debug('Overlays found: %s' % overlays)
     return overlays
 
 
@@ -638,9 +641,9 @@ def get_overlay_by_name(name, tenantid):
     # Get the overlays collection
     overlays = db.overlays
     # Find the overlay
-    logging.info('Searching the overlay %s, tenant ID %s' % (name, tenantid))
+    logging.debug('Searching the overlay %s, tenant ID %s' % (name, tenantid))
     overlay = overlays.find_one(overlay)
-    logging.info('Overlay found: %s' % overlay)
+    logging.debug('Overlay found: %s' % overlay)
     return overlay
 
 
@@ -656,12 +659,12 @@ def overlay_exists(name, tenantid):
     # Get the overlays collection
     overlays = db.overlays
     # Count the overlays with the given name and tenant ID
-    logging.info('Searching the overlay %s, tenant ID %s' % (name, tenantid))
+    logging.debug('Searching the overlay %s, tenant ID %s' % (name, tenantid))
     if overlays.count_documents(overlay, limit=1):
-        logging.info('The overlay exists')
+        logging.debug('The overlay exists')
         return True
     else:
-        logging.info('The overlay does not exist')
+        logging.debug('The overlay does not exist')
         return False
 
 
@@ -674,12 +677,12 @@ def add_slice_to_overlay(overlayid, _slice):
     # Get the overlays collection
     overlays = db.overlays
     # Add the slice to the overlay
-    logging.info('Adding the slice to the overlay %s' % overlayid)
+    logging.debug('Adding the slice to the overlay %s' % overlayid)
     overlays.update_one(
         {'_id': ObjectId(overlayid)},
         {'$push': {'slices': _slice}}
     )
-    logging.info('Slice added to the overlay')
+    logging.debug('Slice added to the overlay')
 
 
 # Add many slices to an overlay
@@ -691,12 +694,12 @@ def add_many_slices_to_overlay(overlayid, slices):
     # Get the overlays collection
     overlays = db.overlays
     # Add the slices to the overlay
-    logging.info('Adding the slice to the overlay %s' % overlayid)
+    logging.debug('Adding the slice to the overlay %s' % overlayid)
     overlays.update_one(
         {'_id': ObjectId(overlayid)},
         {'$pushAll': {'slices': slices}}
     )
-    logging.info('Slices added to the overlay')
+    logging.debug('Slices added to the overlay')
 
 
 # Remove a slice from an overlay
@@ -708,12 +711,12 @@ def remove_slice_from_overlay(overlayid, _slice):
     # Get the overlays collection
     overlays = db.overlays
     # Remove the slice from the overlay
-    logging.info('Removing the slice from the overlay %s' % overlayid)
+    logging.debug('Removing the slice from the overlay %s' % overlayid)
     overlays.update_one(
         {'_id': ObjectId(overlayid)},
         {'$pull': {'slices': _slice}}
     )
-    logging.info('Slice removed from the overlay')
+    logging.debug('Slice removed from the overlay')
 
 
 # Remove many slices from an overlay
@@ -725,12 +728,12 @@ def remove_many_slice_from_overlay(overlayid, slices):
     # Get the overlays collection
     overlays = db.overlays
     # Remove the slices to the overlay
-    logging.info('Removing the slices from the overlay %s' % overlayid)
+    logging.debug('Removing the slices from the overlay %s' % overlayid)
     overlays.update_one(
         {'_id': ObjectId(overlayid)},
         {'$pullAll': {'slices': slices}}
     )
-    logging.info('Slices removed from the overlay')
+    logging.debug('Slices removed from the overlay')
 
 
 # Retrieve the slices contained in a given overlay
@@ -742,12 +745,12 @@ def get_slices_in_overlay(overlayid):
     # Get the overlays collection
     overlays = db.overlays
     # Find the slice in the overlay
-    logging.info('Getting the slices in the overlay %s' % overlayid)
+    logging.debug('Getting the slices in the overlay %s' % overlayid)
     slices = overlays.find_one(
         {'_id': ObjectId(overlayid)},
         {'slices': 1}
     )['slices']
-    logging.info('Slices found: %s' % slices)
+    logging.debug('Slices found: %s' % slices)
     return slices
 
 
@@ -763,12 +766,12 @@ def inc_tunnel_mode_refcount(tunnel_mode, deviceid):
     # Get the tunnel_modes collection
     tunnel_modes = db.tunnel_modes
     # Find the tunnel mode
-    logging.info('Getting the tunnel mode %s' % tunnel_mode)
+    logging.debug('Getting the tunnel mode %s' % tunnel_mode)
     # Increase the ref count for the device
     old_refcount = tunnel_modes.find_one_and_update(
-        query, {'refcount': {'$inc': {deviceid: 1}}})
+        query, {'$inc': {'refcount.' + deviceid: 1}})
     # Return the old ref count
-    logging.info('Old ref count: %s' % old_refcount)
+    logging.debug('Old ref count: %s' % old_refcount)
     return old_refcount
 
 
@@ -784,13 +787,13 @@ def dec_tunnel_mode_refcount(tunnel_mode, deviceid):
     # Get the tunnel_modes collection
     tunnel_modes = db.tunnel_modes
     # Find the tunnel mode
-    logging.info('Getting the tunnel mode %s' % tunnel_mode)
+    logging.debug('Getting the tunnel mode %s' % tunnel_mode)
     # Increase the ref count for the device
     new_refcount = tunnel_modes.find_one_and_update(
-        query, {'refcount': {'$dec': {deviceid: 1}}},
+        query, {'$dec': {'refcount.' + deviceid: 1}},
         return_document=ReturnDocument.AFTER)
     # Return the old ref count
-    logging.info('New ref count: %s' % new_refcount)
+    logging.debug('New ref count: %s' % new_refcount)
     return new_refcount
 
 

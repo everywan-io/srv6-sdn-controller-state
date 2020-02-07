@@ -250,116 +250,68 @@ def get_interfaces(deviceid):
     devices = db.devices
     # Count the interfaces with the given name
     logging.debug('Getting the interfaces of device %s' % deviceid)
-    interfaces = devices.find_one(device, {'interfaces': 1})
+    interfaces = devices.find_one(device, {'interfaces': 1})['interfaces']
     logging.debug('Interfaces found: %s' % interfaces)
     return interfaces
 
 
 # Get device's IPv4 addresses
 def get_ipv4_addresses(deviceid, interface_name):
-    # Build the query
-    device = {'deviceid': deviceid}
-    # Get a reference to the MongoDB client
-    client = get_mongodb_session()
-    # Get the database
-    db = client.EveryWan
-    # Get the devices collection
-    devices = db.devices
     # Find the IPv4 addresses by device ID and interface
     logging.debug('Retrieving IPv4 addresses for device %s' % deviceid)
-    addrs = devices.find_one(device, {'interfaces': 1})
-    addrs = addrs['interfaces'][interface_name]['ipv4_addrs']
+    interfaces = get_interfaces(deviceid)
+    addrs = interfaces[interface_name]['ipv4_addrs']
     logging.debug('IPv4 addresses: %s' % addrs)
     return addrs
 
 
 # Get device's IPv6 addresses
 def get_ipv6_addresses(deviceid, interface_name):
-    # Build the query
-    device = {'deviceid': deviceid}
-    # Get a reference to the MongoDB client
-    client = get_mongodb_session()
-    # Get the database
-    db = client.EveryWan
-    # Get the devices collection
-    devices = db.devices
     # Find the IPv6 addresses by device ID and interface
     logging.debug('Retrieving IPv6 addresses for device %s' % deviceid)
-    addrs = devices.find_one(device, {'interfaces': 1})
-    addrs = addrs['interfaces'][interface_name]['ipv6_addrs']
+    interfaces = get_interfaces(deviceid)
+    addrs = interfaces[interface_name]['ipv6_addrs']
     logging.debug('IPv6 addresses: %s' % addrs)
     return addrs
 
 
 # Get device's IP addresses
 def get_ip_addresses(deviceid, interface_name):
-    # Build the query
-    device = {'deviceid': deviceid}
-    # Get a reference to the MongoDB client
-    client = get_mongodb_session()
-    # Get the database
-    db = client.EveryWan
-    # Get the devices collection
-    devices = db.devices
     # Find the IPv4 addresses by device ID and interface
     logging.debug('Retrieving IPv4 addresses for device %s' % deviceid)
-    addrs = devices.find_one(device, {'interfaces': 1})
-    addrs = addrs['interfaces'][interface_name]['ipv4_addrs'] + \
-        addrs['interfaces'][interface_name]['ipv6_addrs']
+    interfaces = get_interfaces(deviceid)
+    addrs = interfaces[interface_name]['ipv4_addrs'] + \
+        interfaces[interface_name]['ipv6_addrs']
     logging.debug('IPv4 addresses: %s' % addrs)
     return addrs
 
 
 # Get device's external IPv4 addresses
 def get_ext_ipv4_addresses(deviceid, interface_name):
-    # Build the query
-    device = {'deviceid': deviceid}
-    # Get a reference to the MongoDB client
-    client = get_mongodb_session()
-    # Get the database
-    db = client.EveryWan
-    # Get the devices collection
-    devices = db.devices
     # Find the IPv4 addresses by device ID and interface
     logging.debug('Retrieving IPv4 addresses for device %s' % deviceid)
-    addrs = devices.find_one(device, {'interfaces': 1})
-    addrs = addrs['interfaces'][interface_name]['ext_ipv4_addrs']
+    interfaces = get_interfaces(deviceid)
+    addrs = interfaces[interface_name]['ext_ipv4_addrs']
     logging.debug('IPv4 addresses: %s' % addrs)
     return addrs
 
 
 # Get device's external IPv6 addresses
 def get_ext_ipv6_addresses(deviceid, interface_name):
-    # Build the query
-    device = {'deviceid': deviceid}
-    # Get a reference to the MongoDB client
-    client = get_mongodb_session()
-    # Get the database
-    db = client.EveryWan
-    # Get the devices collection
-    devices = db.devices
     # Find the IPv6 addresses by device ID and interface
     logging.debug('Retrieving IPv6 addresses for device %s' % deviceid)
-    addrs = devices.find_one(device, {'interfaces': 1})
-    addrs = addrs['interfaces'][interface_name]['ext_ipv6_addrs']
+    interfaces = get_interfaces(deviceid)
+    addrs = interfaces[interface_name]['ext_ipv6_addrs']
     logging.debug('IPv6 addresses: %s' % addrs)
     return addrs
 
 
 # Get device's external IP addresses
 def get_ext_ip_addresses(deviceid, interface_name):
-    # Build the query
-    device = {'deviceid': deviceid}
-    # Get a reference to the MongoDB client
-    client = get_mongodb_session()
-    # Get the database
-    db = client.EveryWan
-    # Get the devices collection
-    devices = db.devices
     # Find the IPv4 addresses by device ID and interface
     logging.debug('Retrieving IPv4 addresses for device %s' % deviceid)
-    addrs = devices.find_one(device, {'interfaces': 1})
-    addrs = addrs['interfaces'][interface_name]['ext_ipv4_addrs'] + \
+    interfaces = get_interfaces(deviceid)
+    addrs = interfaces[interface_name]['ext_ipv4_addrs'] + \
         addrs['interfaces'][interface_name]['ext_ipv6_addrs']
     logging.debug('IPv4 addresses: %s' % addrs)
     return addrs
@@ -367,55 +319,31 @@ def get_ext_ip_addresses(deviceid, interface_name):
 
 # Get device's IPv4 subnets
 def get_ipv4_subnets(deviceid, interface_name):
-    # Build the query
-    device = {'deviceid': deviceid}
-    # Get a reference to the MongoDB client
-    client = get_mongodb_session()
-    # Get the database
-    db = client.EveryWan
-    # Get the devices collection
-    devices = db.devices
     # Find the IPv4 subnets by device ID and interface
     logging.debug('Retrieving IPv4 subnets for device %s' % deviceid)
-    subnets = devices.find_one(device, {'interfaces': 1})
-    subnets = subnets['interfaces'][interface_name]['ipv4_subnets']
+    interfaces = get_interfaces(deviceid)
+    subnets = interfaces[interface_name]['ipv4_subnets']
     logging.debug('IPv4 subnets: %s' % subnets)
     return subnets
 
 
 # Get device's IPv6 subnets
 def get_ipv6_subnets(deviceid, interface_name):
-    # Build the query
-    device = {'deviceid': deviceid}
-    # Get a reference to the MongoDB client
-    client = get_mongodb_session()
-    # Get the database
-    db = client.EveryWan
-    # Get the devices collection
-    devices = db.devices
     # Find the IPv6 subnets by device ID and interface
     logging.debug('Retrieving IPv6 subnets for device %s' % deviceid)
-    subnets = devices.find_one(device, {'interfaces': 1})
-    subnets = subnets['interfaces'][interface_name]['ipv6_subnets']
+    interfaces = get_interfaces(deviceid)
+    subnets = interfaces[interface_name]['ipv6_subnets']
     logging.debug('IPv6 subnets: %s' % subnets)
     return subnets
 
 
 # Get device's IP subnets
 def get_ip_subnets(deviceid, interface_name):
-    # Build the query
-    device = {'deviceid': deviceid}
-    # Get a reference to the MongoDB client
-    client = get_mongodb_session()
-    # Get the database
-    db = client.EveryWan
-    # Get the devices collection
-    devices = db.devices
     # Find the subnets by device ID and interface
     logging.debug('Retrieving subnets for device %s' % deviceid)
-    subnets = devices.find_one(device, {'interfaces': 1})
-    subnets = subnets['interfaces'][interface_name]['ipv4_subnets'] + \
-        subnets['interfaces'][interface_name]['ipv6_subnets']
+    interfaces = get_interfaces(deviceid)
+    subnets = interfaces[interface_name]['ipv4_subnets'] + \
+        interfaces[interface_name]['ipv6_subnets']
     logging.debug('Subnets: %s' % subnets)
     return subnets
 

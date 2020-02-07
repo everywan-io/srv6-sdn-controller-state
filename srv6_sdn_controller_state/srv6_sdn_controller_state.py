@@ -17,6 +17,8 @@ DEFAULT_MONGODB_PORT = 27017
 DEFAULT_MONGODB_USERNAME = 'root'
 DEFAULT_MONGODB_PASSWORD = '12345678'
 
+DEFAULT_VXLAN_PORT = 4789
+
 # Set logging level
 logging.basicConfig(level=logging.DEBUG)
 
@@ -795,6 +797,29 @@ def dec_tunnel_mode_refcount(tunnel_mode, deviceid):
     # Return the old ref count
     logging.debug('New ref count: %s' % new_refcount)
     return new_refcount
+
+
+# Return the tenant configuration
+def get_tenant_config(tenantid):
+    # Build the query
+    query = {'tenantid': tenantid}
+    # Get a reference to the MongoDB client
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Get the tenants collection
+    tenants = db.tenants
+    # Find the tenant configuration
+    logging.debug('Getting the configuration of the tenant %s' % tenantid)
+    return tenants.find_one(query)['configuration']
+
+
+# Return the VXLAN port used by the tenant
+def get_tenant_vxlan_port(tenantid):
+    # Extract the tenant configuration from the database
+    config = get_tenant_config(tenantid)
+    # Extract the VXLAN port from the tenant configuration
+    return config.get('vxlan_port', DEFAULT_VXLAN_PORT)
 
 
 """ Topology management """

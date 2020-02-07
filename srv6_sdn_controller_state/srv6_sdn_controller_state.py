@@ -287,7 +287,7 @@ def get_ip_addresses(deviceid, interface_name):
 
 
 # Get device's external IPv4 addresses
-def get_ext_ipv4_addresses(deviceid, interface_name):
+def get_ext_ipv4_addrs(deviceid, interface_name):
     # Find the IPv4 addresses by device ID and interface
     logging.debug('Retrieving IPv4 addresses for device %s' % deviceid)
     interfaces = get_interfaces(deviceid)
@@ -297,7 +297,7 @@ def get_ext_ipv4_addresses(deviceid, interface_name):
 
 
 # Get device's external IPv6 addresses
-def get_ext_ipv6_addresses(deviceid, interface_name):
+def get_ext_ipv6_addrs(deviceid, interface_name):
     # Find the IPv6 addresses by device ID and interface
     logging.debug('Retrieving IPv6 addresses for device %s' % deviceid)
     interfaces = get_interfaces(deviceid)
@@ -307,13 +307,13 @@ def get_ext_ipv6_addresses(deviceid, interface_name):
 
 
 # Get device's external IP addresses
-def get_ext_ip_addresses(deviceid, interface_name):
+def get_ext_ip_addrs(deviceid, interface_name):
     # Find the IPv4 addresses by device ID and interface
     logging.debug('Retrieving IPv4 addresses for device %s' % deviceid)
     interfaces = get_interfaces(deviceid)
     addrs = interfaces[interface_name]['ext_ipv4_addrs'] + \
-        addrs['interfaces'][interface_name]['ext_ipv6_addrs']
-    logging.debug('IPv4 addresses: %s' % addrs)
+        interfaces[interface_name]['ext_ipv6_addrs']
+    logging.debug('IP addresses: %s' % addrs)
     return addrs
 
 
@@ -748,6 +748,40 @@ def get_tenant_vxlan_port(tenantid):
     config = get_tenant_config(tenantid)
     # Extract the VXLAN port from the tenant configuration
     return config.get('vxlan_port', DEFAULT_VXLAN_PORT)
+
+
+# Update tunnel mode
+def update_tunnel_mode(deviceid, interfaces, tunnel_mode, nat_type):
+    # Build the query
+    query = {'deviceid': deviceid}
+    # Build the update
+    updates = [{
+        'tunnel_mode': tunnel_mode,
+        'tunnel_info': None,
+        'nat_type': nat_type
+    }]
+    for interface in interfaces.values():
+        interface_name = interface['name']
+        ext_ipv4_addrs = interface['ext_ipv4_addrs']
+        ext_ipv6_addrs = interface['ext_ipv6_addrs']
+        updates.append({
+            '$set': {
+            'interfaces.' + interface_name + '.ext_ipv4_addrs': ext_ipv4_addrs,
+            'interfaces.' + interface_name + '.ext_ipv6_addrs': ext_ipv6_addrs,
+            'status': utils.DeviceStatus.RUNNING
+            }
+        })  
+    # Get a reference to the MongoDB client
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Get the devices collection
+    devices = db.devices
+    # Add the device to the collection
+    logging.debug('Updating device on DB: %s' % update)
+    for update in updates:
+        devices.update_one(query, update)
+    logging.debug('Device successfully updated')
 
 
 """ Topology management """

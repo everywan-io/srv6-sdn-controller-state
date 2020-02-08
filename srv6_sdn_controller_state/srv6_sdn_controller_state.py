@@ -751,13 +751,14 @@ def get_tenant_vxlan_port(tenantid):
 
 
 # Update tunnel mode
-def update_tunnel_mode(deviceid, interfaces, tunnel_mode, nat_type):
+def update_tunnel_mode(deviceid, mgmtip, interfaces, tunnel_mode, nat_type):
     print('\n\n\n\nTUNNEL MODE', tunnel_mode)
     # Build the query
     query = {'deviceid': deviceid}
     # Build the update
     updates = [{
-        '$set': {'tunnel_mode': tunnel_mode,
+        '$set': {'mgmtip': mgmtip,
+                 'tunnel_mode': tunnel_mode,
                  'tunnel_info': None,
                  'nat_type': nat_type}
     }]

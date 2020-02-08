@@ -229,7 +229,7 @@ def interface_exists_on_device(deviceid, interface_name):
     devices = db.devices
     # Count the interfaces with the given name
     logging.debug('Searching the interface %s on device %s' %
-                 (interface_name, deviceid))
+                  (interface_name, deviceid))
     if devices.count_documents(device, limit=1):
         logging.debug('The interface exists')
         return True
@@ -429,7 +429,7 @@ def get_non_loopback_interfaces(deviceid):
 
 
 # Configure the devices
-def configure_devices(devices):    
+def configure_devices(devices):
     # Build the update statements
     queries = []
     updates = []
@@ -445,12 +445,12 @@ def configure_devices(devices):
             type = interface['type']
             updates.append({
                 '$set': {
-                'interfaces.' + interface_name + '.ipv4_addrs': ipv4_addrs,
-                'interfaces.' + interface_name + '.ipv6_addrs': ipv6_addrs,
-                'interfaces.' + interface_name + '.ipv4_subnets': ipv4_subnets,
-                'interfaces.' + interface_name + '.ipv6_subnets': ipv6_subnets,
-                'interfaces.' + interface_name + '.type': type,
-                'status': utils.DeviceStatus.RUNNING
+                    'interfaces.' + interface_name + '.ipv4_addrs': ipv4_addrs,
+                    'interfaces.' + interface_name + '.ipv6_addrs': ipv6_addrs,
+                    'interfaces.' + interface_name + '.ipv4_subnets': ipv4_subnets,
+                    'interfaces.' + interface_name + '.ipv6_subnets': ipv6_subnets,
+                    'interfaces.' + interface_name + '.type': type,
+                    'status': utils.DeviceStatus.RUNNING
                 }
             })
             queries.append({'deviceid': deviceid})
@@ -752,13 +752,14 @@ def get_tenant_vxlan_port(tenantid):
 
 # Update tunnel mode
 def update_tunnel_mode(deviceid, interfaces, tunnel_mode, nat_type):
+    print('\n\n\n\nTUNNEL MODE', tunnel_mode)
     # Build the query
     query = {'deviceid': deviceid}
     # Build the update
     updates = [{
-        'tunnel_mode': tunnel_mode,
-        'tunnel_info': None,
-        'nat_type': nat_type
+        '$set': {'tunnel_mode': tunnel_mode,
+                 'tunnel_info': None,
+                 'nat_type': nat_type}
     }]
     for interface in interfaces.values():
         interface_name = interface['name']
@@ -766,11 +767,11 @@ def update_tunnel_mode(deviceid, interfaces, tunnel_mode, nat_type):
         ext_ipv6_addrs = interface['ext_ipv6_addrs']
         updates.append({
             '$set': {
-            'interfaces.' + interface_name + '.ext_ipv4_addrs': ext_ipv4_addrs,
-            'interfaces.' + interface_name + '.ext_ipv6_addrs': ext_ipv6_addrs,
-            'status': utils.DeviceStatus.RUNNING
+                'interfaces.' + interface_name + '.ext_ipv4_addrs': ext_ipv4_addrs,
+                'interfaces.' + interface_name + '.ext_ipv6_addrs': ext_ipv6_addrs,
+                'status': utils.DeviceStatus.RUNNING
             }
-        })  
+        })
     # Get a reference to the MongoDB client
     client = get_mongodb_session()
     # Get the database
@@ -778,7 +779,7 @@ def update_tunnel_mode(deviceid, interfaces, tunnel_mode, nat_type):
     # Get the devices collection
     devices = db.devices
     # Add the device to the collection
-    logging.debug('Updating device on DB: %s' % update)
+    logging.debug('Updating device on DB: %s' % updates)
     for update in updates:
         devices.update_one(query, update)
     logging.debug('Device successfully updated')
@@ -787,5 +788,7 @@ def update_tunnel_mode(deviceid, interfaces, tunnel_mode, nat_type):
 """ Topology management """
 
 # Return the topology
+
+
 def get_topology():
     raise NotImplementedError

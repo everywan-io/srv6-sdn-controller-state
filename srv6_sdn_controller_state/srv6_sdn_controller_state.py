@@ -287,7 +287,7 @@ def get_ip_addresses(deviceid, interface_name):
 
 
 # Get device's external IPv4 addresses
-def get_ext_ipv4_addrs(deviceid, interface_name):
+def get_ext_ipv4_addresses(deviceid, interface_name):
     # Find the IPv4 addresses by device ID and interface
     logging.debug('Retrieving IPv4 addresses for device %s' % deviceid)
     interfaces = get_interfaces(deviceid)
@@ -297,7 +297,7 @@ def get_ext_ipv4_addrs(deviceid, interface_name):
 
 
 # Get device's external IPv6 addresses
-def get_ext_ipv6_addrs(deviceid, interface_name):
+def get_ext_ipv6_addresses(deviceid, interface_name):
     # Find the IPv6 addresses by device ID and interface
     logging.debug('Retrieving IPv6 addresses for device %s' % deviceid)
     interfaces = get_interfaces(deviceid)
@@ -307,7 +307,7 @@ def get_ext_ipv6_addrs(deviceid, interface_name):
 
 
 # Get device's external IP addresses
-def get_ext_ip_addrs(deviceid, interface_name):
+def get_ext_ip_addresses(deviceid, interface_name):
     # Find the IPv4 addresses by device ID and interface
     logging.debug('Retrieving IPv4 addresses for device %s' % deviceid)
     interfaces = get_interfaces(deviceid)

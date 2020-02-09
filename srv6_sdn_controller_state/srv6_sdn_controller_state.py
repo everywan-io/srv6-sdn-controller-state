@@ -700,6 +700,8 @@ def inc_tunnel_mode_refcount(tunnel_mode, deviceid):
     # Increase the ref count for the device
     old_refcount = tunnel_modes.find_one_and_update(
         query, {'$inc': {'refcount.' + deviceid: 1}})
+    # If the counter does not exists, return 0
+    old_refcount = old_refcount if old_refcount is not None else 0
     # Return the old ref count
     logging.debug('Old ref count: %s' % old_refcount)
     return old_refcount
@@ -752,7 +754,6 @@ def get_tenant_vxlan_port(tenantid):
 
 # Update tunnel mode
 def update_tunnel_mode(deviceid, mgmtip, interfaces, tunnel_mode, nat_type):
-    print('\n\n\n\nTUNNEL MODE', tunnel_mode)
     # Build the query
     query = {'deviceid': deviceid}
     # Build the update

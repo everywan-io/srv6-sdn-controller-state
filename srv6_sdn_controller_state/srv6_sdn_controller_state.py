@@ -771,7 +771,6 @@ def update_tunnel_mode(deviceid, mgmtip, interfaces, tunnel_mode, nat_type):
             '$set': {
                 'interfaces.' + interface_name + '.ext_ipv4_addrs': ext_ipv4_addrs,
                 'interfaces.' + interface_name + '.ext_ipv6_addrs': ext_ipv6_addrs,
-                'status': utils.DeviceStatus.RUNNING
             }
         })
     # Get a reference to the MongoDB client

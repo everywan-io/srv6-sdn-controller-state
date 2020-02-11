@@ -701,7 +701,7 @@ def inc_tunnel_mode_refcount(tunnel_mode, deviceid):
     old_refcount = tunnel_modes.find_one_and_update(
         query, {'$inc': {'refcount.' + deviceid: 1}})
     # If the counter does not exists, return 0
-    old_refcount = old_refcount if old_refcount is not None else 0
+    old_refcount = old_refcount['refcount'][deviceid] if old_refcount is not None else 0
     # Return the old ref count
     logging.debug('Old ref count: %s' % old_refcount)
     return old_refcount
@@ -725,6 +725,7 @@ def dec_tunnel_mode_refcount(tunnel_mode, deviceid):
         query, {'$dec': {'refcount.' + deviceid: 1}},
         return_document=ReturnDocument.AFTER)
     # Return the old ref count
+    new_refcount = new_refcount['refcount'][deviceid]
     logging.debug('New ref count: %s' % new_refcount)
     return new_refcount
 

@@ -546,7 +546,7 @@ def get_overlays(overlayids=None, tenantid=None):
     if tenantid is not None:
         query['tenantid'] = tenantid
     if overlayids is not None:
-        query['_id'] = {'$in': overlayids}
+        query['_id'] = {'$in': [ObjectId(overlayid) for overlayid in overlayids]} 
     # Get a reference to the MongoDB client
     client = get_mongodb_session()
     # Get the database
@@ -650,7 +650,7 @@ def remove_slice_from_overlay(overlayid, _slice):
 
 
 # Remove many slices from an overlay
-def remove_many_slice_from_overlay(overlayid, slices):
+def remove_many_slices_from_overlay(overlayid, slices):
     # Get a reference to the MongoDB client
     client = get_mongodb_session()
     # Get the database
@@ -699,9 +699,15 @@ def inc_tunnel_mode_refcount(tunnel_mode, deviceid):
     logging.debug('Getting the tunnel mode %s' % tunnel_mode)
     # Increase the ref count for the device
     old_refcount = tunnel_modes.find_one_and_update(
-        query, {'$inc': {'refcount.' + deviceid: 1}})
+        query, {'$inc': {'refcount.' + deviceid: 1}}, upsert=True)
     # If the counter does not exists, return 0
-    old_refcount = old_refcount if old_refcount is not None else 0
+    if old_refcount is None:
+        old_refcount = 0
+    else:
+        if deviceid in old_refcount['refcount']:
+            old_refcount = old_refcount['refcount'][deviceid]
+        else:
+            old_refcount = 0
     # Return the old ref count
     logging.debug('Old ref count: %s' % old_refcount)
     return old_refcount
@@ -722,9 +728,10 @@ def dec_tunnel_mode_refcount(tunnel_mode, deviceid):
     logging.debug('Getting the tunnel mode %s' % tunnel_mode)
     # Increase the ref count for the device
     new_refcount = tunnel_modes.find_one_and_update(
-        query, {'$dec': {'refcount.' + deviceid: 1}},
+        query, {'$inc': {'refcount.' + deviceid: -1}},
         return_document=ReturnDocument.AFTER)
     # Return the old ref count
+    new_refcount = new_refcount['refcount'][deviceid]
     logging.debug('New ref count: %s' % new_refcount)
     return new_refcount
 

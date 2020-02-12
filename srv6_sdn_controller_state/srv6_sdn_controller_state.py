@@ -165,6 +165,27 @@ def device_exists(deviceid):
         return False
 
 
+# Return True if all the devices exists,
+# False otherwise
+def devices_exists(deviceids):
+    # Build the query
+    query = {'deviceid': {'$in': deviceids}}
+    # Get a reference to the MongoDB client
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Get the devices collection
+    devices = db.devices
+    # Count the devices with the given device ID
+    logging.debug('Searching the device %s' % deviceid)
+    if devices.count_documents(query) == len(deviceids):
+        logging.debug('The devices exist')
+        return True
+    else:
+        logging.debug('The devices do not exist')
+        return False
+
+
 # Return True if a device exists and is in running state,
 # False otherwise
 def is_device_running(deviceid):
@@ -701,7 +722,13 @@ def inc_tunnel_mode_refcount(tunnel_mode, deviceid):
     old_refcount = tunnel_modes.find_one_and_update(
         query, {'$inc': {'refcount.' + deviceid: 1}})
     # If the counter does not exists, return 0
-    old_refcount = old_refcount['refcount'][deviceid] if old_refcount is not None else 0
+    if old_refcount is None:
+        old_refcount = 0
+    else:
+        if deviceid in old_refcount['refcount']:
+            old_refcount = old_refcount['refcount'][deviceid]
+        else:
+            old_refcount = 0
     # Return the old ref count
     logging.debug('Old ref count: %s' % old_refcount)
     return old_refcount
@@ -724,8 +751,11 @@ def dec_tunnel_mode_refcount(tunnel_mode, deviceid):
     new_refcount = tunnel_modes.find_one_and_update(
         query, {'$dec': {'refcount.' + deviceid: 1}},
         return_document=ReturnDocument.AFTER)
-    # Return the old ref count
     new_refcount = new_refcount['refcount'][deviceid]
+    # If counter is 0, remove the device from tunnel modes
+    if new_refcount == 0:
+        tunnel_modes.update_one(query, {'$unset': {'refcount.' + deviceid: 1}})
+    # Return the old ref count
     logging.debug('New ref count: %s' % new_refcount)
     return new_refcount
 
@@ -785,6 +815,58 @@ def update_tunnel_mode(deviceid, mgmtip, interfaces, tunnel_mode, nat_type):
     for update in updates:
         devices.update_one(query, update)
     logging.debug('Device successfully updated')
+    
+    
+""" Tenant management """
+
+
+# Return information about tenants
+def get_tenant_configs(tenantids):
+    # Build the query
+    query = {'$in': list(tenantids)}
+    # Get a reference to the MongoDB client
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Get the tenants collection
+    tenants = db.tenants
+    # Get the tenant configs
+    logging.debug('Getting the tenants %s' % tenantids)
+    tenants = tenants.find(query, {'conf': 1})
+    # Return the configs
+    configs = dict()
+    for tenantid in tenants:
+        configs[tenantid] = {
+            'name': tenants[tenantid]['name'],
+            'tenantid': tenants[tenantid]['tenantid']
+            'config': tenants[tenantid]['conf'],
+            'info': tenants[tenantid]['info']
+        }
+        
+    logging.debug('Configs: %s' % configs)
+    return configs
+
+
+# Get tenant ID by token
+def get_tenantid(token):
+    # Build the query
+    query = {'token': token}
+    # Get a reference to the MongoDB client
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Get the tenants collection
+    tenants = db.tenants
+    # Get the tenant ID
+    logging.debug('Getting the tenant ID')
+    tenants = tenants.find_one(query, {'tenantid': 1})
+    # Return the tenant ID
+    return tenants.get('tenantid', None)
+
+
+# Device authentication
+def authenticate_device(token):
+    return get_tenantid(token) is not None
 
 
 """ Topology management """

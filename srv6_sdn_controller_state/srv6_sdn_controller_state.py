@@ -81,7 +81,7 @@ def unregister_device(deviceid):
     # Get the devices collection
     devices = db.devices
     # Delete the device from the collection
-    logging.debug('Unregistering device: %s' % deviceid)
+    logging.debug('Unregistering device: %s' % deviceid)query['_id'] = {'$in': [
     devices.delete_one(device)
     logging.debug('Device successfully unregistered')
 
@@ -546,7 +546,7 @@ def get_overlays(overlayids=None, tenantid=None):
     if tenantid is not None:
         query['tenantid'] = tenantid
     if overlayids is not None:
-        query['_id'] = {'$in': [ObjectId(overlayid) for overlayid in overlayids]} 
+        query['_id'] = {'$in': [ObjectId(overlayid) for overlayid in overlayids]}
     # Get a reference to the MongoDB client
     client = get_mongodb_session()
     # Get the database

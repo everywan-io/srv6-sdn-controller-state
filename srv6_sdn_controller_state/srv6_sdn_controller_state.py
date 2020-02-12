@@ -81,7 +81,7 @@ def unregister_device(deviceid):
     # Get the devices collection
     devices = db.devices
     # Delete the device from the collection
-    logging.debug('Unregistering device: %s' % deviceid)
+    logging.debug('Unregistering device: %s' % deviceid)query['_id'] = {'$in': [
     devices.delete_one(device)
     logging.debug('Device successfully unregistered')
 
@@ -308,7 +308,7 @@ def get_ip_addresses(deviceid, interface_name):
 
 
 # Get device's external IPv4 addresses
-def get_ext_ipv4_addrs(deviceid, interface_name):
+def get_ext_ipv4_addresses(deviceid, interface_name):
     # Find the IPv4 addresses by device ID and interface
     logging.debug('Retrieving IPv4 addresses for device %s' % deviceid)
     interfaces = get_interfaces(deviceid)
@@ -318,7 +318,7 @@ def get_ext_ipv4_addrs(deviceid, interface_name):
 
 
 # Get device's external IPv6 addresses
-def get_ext_ipv6_addrs(deviceid, interface_name):
+def get_ext_ipv6_addresses(deviceid, interface_name):
     # Find the IPv6 addresses by device ID and interface
     logging.debug('Retrieving IPv6 addresses for device %s' % deviceid)
     interfaces = get_interfaces(deviceid)
@@ -328,7 +328,7 @@ def get_ext_ipv6_addrs(deviceid, interface_name):
 
 
 # Get device's external IP addresses
-def get_ext_ip_addrs(deviceid, interface_name):
+def get_ext_ip_addresses(deviceid, interface_name):
     # Find the IPv4 addresses by device ID and interface
     logging.debug('Retrieving IPv4 addresses for device %s' % deviceid)
     interfaces = get_interfaces(deviceid)
@@ -567,7 +567,7 @@ def get_overlays(overlayids=None, tenantid=None):
     if tenantid is not None:
         query['tenantid'] = tenantid
     if overlayids is not None:
-        query['_id'] = {'$in': overlayids}
+        query['_id'] = {'$in': [ObjectId(overlayid) for overlayid in overlayids]}
     # Get a reference to the MongoDB client
     client = get_mongodb_session()
     # Get the database
@@ -671,7 +671,7 @@ def remove_slice_from_overlay(overlayid, _slice):
 
 
 # Remove many slices from an overlay
-def remove_many_slice_from_overlay(overlayid, slices):
+def remove_many_slices_from_overlay(overlayid, slices):
     # Get a reference to the MongoDB client
     client = get_mongodb_session()
     # Get the database
@@ -720,7 +720,7 @@ def inc_tunnel_mode_refcount(tunnel_mode, deviceid):
     logging.debug('Getting the tunnel mode %s' % tunnel_mode)
     # Increase the ref count for the device
     old_refcount = tunnel_modes.find_one_and_update(
-        query, {'$inc': {'refcount.' + deviceid: 1}})
+        query, {'$inc': {'refcount.' + deviceid: 1}}, upsert=True)
     # If the counter does not exists, return 0
     if old_refcount is None:
         old_refcount = 0
@@ -749,13 +749,14 @@ def dec_tunnel_mode_refcount(tunnel_mode, deviceid):
     logging.debug('Getting the tunnel mode %s' % tunnel_mode)
     # Increase the ref count for the device
     new_refcount = tunnel_modes.find_one_and_update(
-        query, {'$dec': {'refcount.' + deviceid: 1}},
+        query, {'$inc': {'refcount.' + deviceid: -1}},
         return_document=ReturnDocument.AFTER)
     new_refcount = new_refcount['refcount'][deviceid]
     # If counter is 0, remove the device from tunnel modes
     if new_refcount == 0:
         tunnel_modes.update_one(query, {'$unset': {'refcount.' + deviceid: 1}})
     # Return the old ref count
+    new_refcount = new_refcount['refcount'][deviceid]
     logging.debug('New ref count: %s' % new_refcount)
     return new_refcount
 

@@ -81,7 +81,7 @@ def unregister_device(deviceid):
     # Get the devices collection
     devices = db.devices
     # Delete the device from the collection
-    logging.debug('Unregistering device: %s' % deviceid)query['_id'] = {'$in': [
+    logging.debug('Unregistering device: %s' % deviceid)
     devices.delete_one(device)
     logging.debug('Device successfully unregistered')
 
@@ -839,7 +839,7 @@ def get_tenant_configs(tenantids):
     for tenantid in tenants:
         configs[tenantid] = {
             'name': tenants[tenantid]['name'],
-            'tenantid': tenants[tenantid]['tenantid']
+            'tenantid': tenants[tenantid]['tenantid'],
             'config': tenants[tenantid]['conf'],
             'info': tenants[tenantid]['info']
         }
@@ -863,6 +863,58 @@ def get_tenantid(token):
     tenants = tenants.find_one(query, {'tenantid': 1})
     # Return the tenant ID
     return tenants.get('tenantid', None)
+
+'''
+# Allocate and return a new table ID for a overlay
+def get_new_tableid(tenantid):
+    # Build the query
+    query = {'tenantid': tenantid}
+    # Get a reference to the MongoDB client
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Get the tenants collection
+    tenants = db.tenants
+    # Get a new table ID
+    logging.debug('Getting new table ID for the tenant %s' % tenantid)
+    tableid = tenants.find_one_and_update(
+        query, {'$inc': {'counters.last_tableid': 1}},
+        upsert=True,
+        return_document=ReturnDocument.AFTER)['counters']['last_tableid']
+    # Return the table ID
+    return tableid
+
+
+# Return the table ID assigned to the VPN
+# If the VPN has no assigned table IDs, return -1
+def get_tableid(overlay_name, tenantid):
+    if tenantid not in self.vpn_to_tableid:
+        return -1
+    return self.vpn_to_tableid[tenantid].get(vpn_name, -1)
+
+
+# Release a table ID and mark it as reusable
+def release_tableid(vpn_name, tenantid):
+    # Check if the VPN has an associated table ID
+    if self.vpn_to_tableid[tenantid].get(vpn_name):
+        # The VPN has an associated table ID
+        tableid = self.vpn_to_tableid[tenantid][vpn_name]
+        # Unassign the table ID
+        del self.vpn_to_tableid[tenantid][vpn_name]
+        # Mark the table ID as reusable
+        self.reusable_tableids[tenantid].add(tableid)
+        # If the tenant has no VPNs,
+        # destory data structures
+        if len(self.vpn_to_tableid[tenantid]) == 0:
+            del self.vpn_to_tableid[tenantid]
+            del self.reusable_tableids[tenantid]
+            del self.last_allocated_tableid[tenantid]
+        # Return the table ID
+        return tableid
+    else:
+        # The VPN has not an associated table ID
+        return -1
+'''
 
 
 # Device authentication

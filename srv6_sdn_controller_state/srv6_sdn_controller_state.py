@@ -756,7 +756,6 @@ def dec_tunnel_mode_refcount(tunnel_mode, deviceid):
     if new_refcount == 0:
         tunnel_modes.update_one(query, {'$unset': {'refcount.' + deviceid: 1}})
     # Return the old ref count
-    new_refcount = new_refcount['refcount'][deviceid]
     logging.debug('New ref count: %s' % new_refcount)
     return new_refcount
 

@@ -56,6 +56,8 @@ def register_device(deviceid, features, interfaces, mgmtip,
     # Build the document to insert
     device = {
         'deviceid': deviceid,
+        'name': None,
+        'description': None,
         'features': features,
         'interfaces': interfaces,
         'mgmtip': mgmtip,
@@ -64,6 +66,11 @@ def register_device(deviceid, features, interfaces, mgmtip,
         'tunnel_info': None,
         'nat_type': None,
         'status': utils.DeviceStatus.CONNECTED,
+        'stats': {
+            'counters': {
+                'tunnel_mode': {}
+            }
+        },
         'registration_timestamp': str(datetime.datetime.utcnow())
     }
     # Register the device
@@ -1121,7 +1128,7 @@ def get_and_inc_tunnel_mode_counter(tunnel_mode, deviceid):
         logging.debug('Getting the device %s' % deviceid)
         # Increase the counter for the tunnel mode
         device = devices.find_one_and_update(
-            query, {'$inc': {'stats.counters.tunnel_mode' + tunnel_mode: 1}}, upsert=True)
+            query, {'$inc': {'stats.counters.tunnel_mode.' + tunnel_mode: 1}}, upsert=True)
         # Return the counter if exists, 0 otherwise
         counter = device['stats']['counters']['tunnel_mode'].get(
             tunnel_mode, 0)
@@ -1150,7 +1157,7 @@ def dec_and_get_tunnel_mode_counter(tunnel_mode, deviceid):
         logging.debug('Getting the device %s' % deviceid)
         # Decrease the counter for the tunnel mode
         device = devices.find_one_and_update(
-            query, {'$inc': {'stats.counters.tunnel_mode' + tunnel_mode: -1}},
+            query, {'$inc': {'stats.counters.tunnel_mode.' + tunnel_mode: -1}},
             return_document=ReturnDocument.AFTER)
         # Return the counter
         counter = device['stats']['counters']['tunnel_mode'][tunnel_mode]
@@ -1185,7 +1192,7 @@ def get_tenant_config(tenantid):
         logging.debug('Getting the configuration of the tenant %s' % tenantid)
         tenant = tenants.find_one(query)
         if tenant is not None:
-            config = tenant['conf']
+            config = tenant['config']
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the tenant configuration if the tenant exists,
@@ -1214,7 +1221,7 @@ def get_tenant_configs(tenantids):
             configs[tenantid] = {
                 'name': tenants[tenantid]['name'],
                 'tenantid': tenants[tenantid]['tenantid'],
-                'config': tenants[tenantid]['conf'],
+                'config': tenants[tenantid]['config'],
                 'info': tenants[tenantid]['info']
             }
         logging.debug('Configs: %s' % configs)
@@ -1260,6 +1267,71 @@ def get_tenantid(token):
     # Return the tenant ID if success,
     # return None if an error occurred during the connection to the db
     return tenantid
+
+
+# Configure a tenant
+def configure_tenant(tenantid, tenant_info=None, vxlan_port=None):
+    logging.debug('Configuring tenant %s (info %s, vxlan_port %s)'
+                    % (tenantid, tenant_info, vxlan_port))
+    # Build the query
+    query = {'tenantid': tenantid}
+    # Build the update statement
+    update = {'$set': {'configured': True}}
+    if vxlan_port is not None:
+        update['$set']['config.vxlan_port'] = vxlan_port
+    if tenant_info is not None:
+        update['$set']['info'] = tenant_info
+    success = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the tenants collection
+        tenants = db.tenants
+        # Configure the tenant
+        success = tenants.update_one(query, update).acknowledged
+        if success:
+            logging.debug('Tenant configured successfully')
+        else:
+            logging.error('Error configuring the tenant')
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return True if success,
+    # return False if failure or
+    # return None if an error occurred during the connection to the db
+    return success
+
+
+# Return True if the tenant is configured,
+# False otherwise,
+# None if an error occurred to the connection to the db
+def is_tenant_configured(tenantid):
+    logging.debug('Checking if tenant %s already '
+                  'received the configuration' % tenantid)
+    # Build the query
+    query = {'tenantid': tenantid}
+    is_config = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the tenants collection
+        tenants = db.tenants
+        # Configure the tenant
+        tenant = tenants.find_one(query)
+        if tenant is not None:
+            logging.debug('The tenant is configured')
+            is_config = tenant.get('configured', False)
+        else:
+            logging.error('Tenant not found')
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return True if the tenant is configured,
+    # False otherwise,
+    # None if an error occurred to the connection to the db
+    return is_config
 
 
 '''
@@ -1317,7 +1389,9 @@ def release_tableid(vpn_name, tenantid):
 
 # Device authentication
 def authenticate_device(token):
-    return get_tenantid(token) is not None
+    tenantid = get_tenantid(token)
+    #return tenantid is not None, tenantid      # TODO for the future...
+    return True, '1'
 
 
 """ Topology """

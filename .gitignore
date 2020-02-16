@@ -6,3 +6,4 @@ srv6_sdn_controller_state.egg-info/PKG-INFO
 srv6_sdn_controller_state.egg-info/requires.txt
 srv6_sdn_controller_state.egg-info/SOURCES.txt
 srv6_sdn_controller_state.egg-info/top_level.txt
+.vscode/settings.json

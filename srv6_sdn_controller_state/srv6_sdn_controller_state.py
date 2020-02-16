@@ -1334,6 +1334,35 @@ def is_tenant_configured(tenantid):
     return is_config
 
 
+# Return True if a tenant exists,
+# False otherwise
+def tenant_exists(tenantid):
+    # Build the query
+    query = {'tenantid': tenantid}
+    tenant_exists = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the tenants collection
+        tenants = db.tenants
+        # Count the tenants with the given tenant ID
+        logging.debug('Searching the tenant %s' % tenantid)
+        if tenants.count_documents(query, limit=1):
+            logging.debug('The tenant exists')
+            tenant_exists = True
+        else:
+            logging.debug('The tenant does not exist')
+            tenant_exists = False
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return True if the tenant exists,
+    # False if the tenant does not exist
+    # or None if an error occurred during the connection to the db
+    return tenant_exists
+
+
 '''
 # Allocate and return a new table ID for a overlay
 def get_new_tableid(tenantid):

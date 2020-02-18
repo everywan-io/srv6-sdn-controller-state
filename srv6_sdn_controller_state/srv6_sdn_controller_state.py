@@ -65,10 +65,12 @@ def register_device(deviceid, features, interfaces, mgmtip,
         'tunnel_mode': None,
         'tunnel_info': None,
         'nat_type': None,
-        'status': utils.DeviceStatus.CONNECTED,
+        'connected': True,
+        'configured': False,
+        'enabled': False,
         'stats': {
             'counters': {
-                'tunnel_mode': {}
+                'tunnels': []
             }
         },
         'registration_timestamp': str(datetime.datetime.utcnow())
@@ -110,7 +112,7 @@ def unregister_device(deviceid):
         # Get the devices collection
         devices = db.devices
         # Delete the device from the collection
-        success = devices.delete_one(device).acknowledged
+        success = devices.delete_one(device).deleted_count == 0
         if success:
             logging.debug('Device unregistered successfully')
         else:
@@ -172,21 +174,22 @@ def unregister_all_devices():
 # Update tunnel mode
 def update_tunnel_mode(deviceid, mgmtip, interfaces, tunnel_mode, nat_type):
     # Build the query
-    query = {'deviceid': deviceid}
+    query = [{'deviceid': deviceid}]
+    for interface in interfaces:
+        query.append({'deviceid': deviceid, 'interfaces.name': interface})
     # Build the update
-    update = {
+    update = [{
         '$set': {'mgmtip': mgmtip,
                  'tunnel_mode': tunnel_mode,
                  'nat_type': nat_type}
-    }
+    }]
     for interface in interfaces.values():
-        interface_name = interface['name']
-        ext_ipv4_addrs = interface['ext_ipv4_addrs']
-        ext_ipv6_addrs = interface['ext_ipv6_addrs']
-        update['$set']['interfaces.' + interface_name +
-                       '.ext_ipv4_addrs'] = ext_ipv4_addrs
-        update['$set']['interfaces.' + interface_name +
-                       '.ext_ipv6_addrs'] = ext_ipv6_addrs
+        update.append({
+            '$set': {
+                'interfaces.$.ext_ipv4_addrs': interface['ext_ipv4_addrs'],
+                'interfaces.$.ext_ipv6_addrs': interface['ext_ipv6_addrs']
+            }
+        })
     success = None
     try:
         # Get a reference to the MongoDB client
@@ -195,9 +198,17 @@ def update_tunnel_mode(deviceid, mgmtip, interfaces, tunnel_mode, nat_type):
         db = client.EveryWan
         # Get the devices collection
         devices = db.devices
-        # Add the device to the collection
-        logging.debug('Updating device on DB: %s' % update)
-        success = devices.update_one(query, update).acknowledged
+        # Update the device
+        for q, u in zip(query, update):
+            logging.debug('Updating interface %s on DB' % q)
+            res = devices.update_one(q, u).matched_count == 1
+            if res:
+                logging.debug('Interface successfully updated')
+                if success is not False:
+                    success = True
+            else:
+                logging.error('Cannot update interface')
+                success = False
         if success:
             logging.debug('Device successfully updated')
         else:
@@ -327,29 +338,47 @@ def devices_exists(deviceids):
     return devices_exist
 
 
-# Return True if a device exists and is in running state,
+# Return True if a device exists and is in enabled state,
 # False otherwise
-def is_device_running(deviceid):
+def is_device_enabled(deviceid):
     # Get the device
     logging.debug('Searching the device %s' % deviceid)
     device = get_device(deviceid)
     res = None
     if device is not None:
         # Get the status of the device
-        status = device['status']
-        if status == utils.DeviceStatus.RUNNING:
-            logging.debug('The device is running')
-            res = True
+        res = device['enabled']
+        if res:
+            logging.debug('The device is enabled')
         else:
-            logging.debug('The device is not running')
-            res = False
-    # Return True if the device is running,
-    # False if it is not running or
+            logging.debug('The device is not enabled')
+    # Return True if the device is enabled,
+    # False if it is not enabled or
     # None if an error occurred during the connection to the db
     return res
 
 
-# Return True if a device exists and is connected,
+# Return True if a device exists and is in configured state,
+# False otherwise
+def is_device_configured(deviceid):
+    # Get the device
+    logging.debug('Searching the device %s' % deviceid)
+    device = get_device(deviceid)
+    res = None
+    if device is not None:
+        # Get the status of the device
+        res = device['configured']
+        if res:
+            logging.debug('The device is configured')
+        else:
+            logging.debug('The device is not configured')
+    # Return True if the device is configured,
+    # False if it is not configured or
+    # None if an error occurred during the connection to the db
+    return res
+
+
+# Return True if a device exists and is in connected state,
 # False otherwise
 def is_device_connected(deviceid):
     # Get the device
@@ -358,13 +387,11 @@ def is_device_connected(deviceid):
     res = None
     if device is not None:
         # Get the status of the device
-        status = device['status']
-        if status in [utils.DeviceStatus.CONNECTED, utils.DeviceStatus.RUNNING]:
-            logging.debug('The device is running')
-            res = True
+        res = device['connected']
+        if res:
+            logging.debug('The device is connected')
         else:
-            logging.debug('The device is not running')
-            res = False
+            logging.debug('The device is not connected')
     # Return True if the device is connected,
     # False if it is not connected or
     # None if an error occurred during the connection to the db
@@ -374,36 +401,62 @@ def is_device_connected(deviceid):
 # Return True if an interface exists on a given device,
 # False otherwise
 def interface_exists_on_device(deviceid, interface_name):
+    # Build the query
+    query = {'deviceid': deviceid, 'interfaces.name': interface_name}
     # Get the device
     logging.debug('Getting the interface %s on the device %s' %
                   (interface_name, deviceid))
-    device = get_device(deviceid)
-    res = None
-    if device is not None:
-        # Check if the interface exists
-        if interface_name in device['interfaces']:
-            res = True
+    exists = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the devices collection
+        devices = db.devices
+        # Add the device to the collection
+        device = devices.find_one(query)
+        if device is not None:
+            logging.debug('The interface exists on the device')
+            exists = True
         else:
-            res = False
+            logging.debug('The interface does not exist on the device')
+            exists = False
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
     # Return True if the interface exists,
     # False if it not exists or
     # None if an error occurred during the connection to the db
-    return res
+    return exists
 
 
 # Return an interface of a device
 def get_interface(deviceid, interface_name):
-    # Get the device
     logging.debug('Getting the interface %s of device %s' %
                   (interface_name, deviceid))
-    device = get_device(deviceid)
+    # Build the query
+    query = {'deviceid': deviceid}
+    # Build the filter
+    filter = {'interfaces': {'$elemMatch': {'name': interface_name}}}
     interface = None
-    if device is not None:
-        # Return the interface
-        interface = device['interfaces'].get(interface_name)
-    # Return the interface if it exists,
-    # None if the interface does not exist or
-    # None if an error occurred during the connection to the db
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the devices collection
+        devices = db.devices
+        # Find the interface
+        interfaces = devices.find_one(query, filter)['interfaces']
+        if len(interfaces) == 0:
+            # Interface not found
+            logging.debug('Interface not found')
+        else:
+            interface = interfaces[0]
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return the interface if exists,
+    # None if it does not exist or if an error occurred
     return interface
 
 
@@ -642,7 +695,7 @@ def get_wan_interfaces(deviceid):
     if interfaces is not None:
         # Filter WAN interfaces
         wan_interfaces = list()
-        for interface in interfaces.values():
+        for interface in interfaces:
             if interface['type'] == utils.InterfaceType.WAN:
                 wan_interfaces.append(interface['name'])
     # Return the WAN interfaces if the device exists,
@@ -659,7 +712,7 @@ def get_lan_interfaces(deviceid):
     if interfaces is not None:
         # Filter LAN interfaces
         lan_interfaces = list()
-        for interface in interfaces.values():
+        for interface in interfaces:
             if interface['type'] == utils.InterfaceType.LAN:
                 lan_interfaces.append(interface['name'])
     # Return the LAN interfaces if the device exists,
@@ -676,7 +729,7 @@ def get_non_loopback_interfaces(deviceid):
     if interfaces is not None:
         # Filter non-loopback interfaces
         non_lo_interfaces = list()
-        for interface in interfaces.values():
+        for interface in interfaces:
             if interface['name'] != 'lo':
                 non_lo_interfaces.append(interface['name'])
     # Return the non-loopback interfaces if the device exists,
@@ -700,11 +753,11 @@ def configure_devices(devices):
         # Add query
         queries.append({'deviceid': deviceid})
         # Add update
-        update = {'$set': {
+        updates.append({'$set': {
             'name': name,
             'description': description,
-            'status': utils.DeviceStatus.RUNNING
-        }}
+            'configured': True
+        }})
         # Get interfaces
         interfaces = device['interfaces']
         for interface in interfaces.values():
@@ -720,17 +773,19 @@ def configure_devices(devices):
             ipv6_subnets = interface['ipv6_subnets']
             # Get the type of the interface
             type = interface['type']
+            # Add query
+            queries.append(
+                {'deviceid': deviceid, 'interfaces.name': interface_name})
             # Add update
-            update['$set']['interfaces.' +
-                            interface_name + '.ipv4_addrs'] = ipv4_addrs
-            update['$set']['interfaces.' +
-                            interface_name + '.ipv6_addrs'] = ipv6_addrs
-            update['$set']['interfaces.' + interface_name +
-                            '.ipv4_subnets'] = ipv4_subnets
-            update['$set']['interfaces.' + interface_name +
-                            '.ipv6_subnets'] = ipv6_subnets
-            update['$set']['interfaces.' + interface_name + '.type'] = type
-        updates.append(update)
+            updates.append({
+                '$set': {
+                    'interfaces.$.ipv4_addrs': ipv4_addrs,
+                    'interfaces.$.ipv6_addrs': ipv6_addrs,
+                    'interfaces.$.ipv4_subnets': ipv4_subnets,
+                    'interfaces.$.ipv6_subnets': ipv6_subnets,
+                    'interfaces.$.type': type
+                }
+            })
     res = True
     try:
         # Get a reference to the MongoDB client
@@ -742,7 +797,7 @@ def configure_devices(devices):
         # Update the devices
         logging.debug('Configuring devices')
         for query, update in zip(queries, updates):
-            success = devices.update_one(query, update).acknowledged
+            success = devices.update_one(query, update).matched_count == 1
             if not success:
                 logging.error('Cannot configure device %s' % query)
                 res = False
@@ -753,6 +808,136 @@ def configure_devices(devices):
     # Return True if all the devices have been configured,
     # False otherwise
     return res
+
+
+# Enable or disable a device
+def set_device_enabled_flag(deviceid, enabled):
+    # Build the query
+    query = {'deviceid': deviceid}
+    # Build the update
+    update = {'$set': {'enabled': enabled}}
+    success = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the devices collection
+        devices = db.devices
+        # Change 'enabled' flag
+        logging.debug('Change enabled flag for device %s' % deviceid)
+        success = devices.update_one(query, update).matched_count == 1
+        if not success:
+            logging.error('Cannot change enabled flag: device not found')
+        else:
+            logging.debug('Enabled flag updated successfully')
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return True if success,
+    # False otherwise
+    return success
+
+
+# Get the counter of a tunnel mode on a device and
+# increase the counter
+def get_and_inc_tunnel_mode_counter(tunnel_mode, deviceid):
+    # Build the query
+    query = {'deviceid': deviceid,
+             'stats.counters.tunnels.tunnel_mode': tunnel_mode}
+    counter = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the devices collection
+        devices = db.devices
+        # Find the device
+        logging.debug('Getting the device %s' % deviceid)
+        # If the counter does not exist, create it
+        devices.update_one({'deviceid': deviceid}, {'$addToSet': {
+                           'stats.counters.tunnels': {'tunnel_mode': tunnel_mode, 'counter': 0}}})
+        # Increase the counter for the tunnel mode
+        device = devices.find_one_and_update(
+            query, {'$inc': {'stats.counters.tunnels.$.counter': 1}}, upsert=True)
+        # Return the counter if exists, 0 otherwise
+        counter = 0
+        for tunnel_mode in device['stats']['counters']['tunnels']:
+            if tunnel_mode == tunnel_mode['tunnel_mode']:
+                counter = tunnel_mode['counter']
+        logging.debug('Counter before the increment: %s' % counter)
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return the counter if success,
+    # None if an error occurred during the connection to the db
+    return counter
+
+
+# Decrease the counter of a tunnel mode on a device and
+# return the counter after the decrement
+def dec_and_get_tunnel_mode_counter(tunnel_mode, deviceid):
+    # Build the query
+    query = {'deviceid': deviceid,
+             'stats.counters.tunnels.tunnel_mode': tunnel_mode}
+    counter = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the devices collection
+        devices = db.devices
+        # Find the device
+        logging.debug('Getting the device %s' % deviceid)
+        # Decrease the counter for the tunnel mode
+        device = devices.find_one_and_update(
+            query, {'$inc': {'stats.counters.tunnels.$.counter': -1}},
+            return_document=ReturnDocument.AFTER)
+        # Return the counter
+        counter = 0
+        for tunnel_mode in device['stats']['counters']['tunnels']:
+            if tunnel_mode == tunnel_mode['tunnel_mode']:
+                counter = tunnel_mode['counter']
+        logging.debug('Counter after the decrement: %s' % counter)
+        # If counter is 0, remove the tunnel mode from the device stats
+        if counter == 0:
+            devices.update_one(
+                query, {'$pull': {'stats.counters.tunnels': {'tunnel_mode': 'VXLAN'}}})
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return the counter if success,
+    # None if an error occurred during the connection to the db
+    return counter
+
+
+# Return the number of tunnels configured on a device
+def get_num_tunnels(deviceid):
+    # Build the query
+    query = {'deviceid': deviceid}
+    num = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the devices collection
+        devices = db.devices
+        # Find the device
+        logging.debug('Counting tunnels for device %s' % deviceid)
+        # Get the device
+        device = devices.find_one(query)
+        # Extract tunnel mode counter
+        counters = device['stats']['counters']['tunnels']
+        # Count the tunnels
+        num = 0
+        for tunnel_mode in counters:
+            num += tunnel_mode['counter']
+        logging.debug('%s tunnels found' % num)
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return the number of tunnels if success,
+    # None if an error occurred during the connection to the db
+    return num
 
 
 ''' Functions operating on the overlays collection '''
@@ -803,7 +988,7 @@ def remove_overlay(overlayid):
         overlays = db.overlays
         # Remove the overlay from the collection
         logging.debug('Removing the overlay: %s' % overlayid)
-        success = overlays.delete_one(overlay).acknowledged
+        success = overlays.delete_one(overlay).deleted_count == 1
         if success:
             logging.debug('Overlay removed successfully')
         else:
@@ -840,7 +1025,7 @@ def remove_all_overlays():
 # Remove all the overlays of a tenant
 def remove_overlays_by_tenantid(tenantid):
     # Build the filter
-    overlay = {'tenantid': tenantid}
+    filter = {'tenantid': tenantid}
     success = None
     try:
         # Get a reference to the MongoDB client
@@ -851,7 +1036,7 @@ def remove_overlays_by_tenantid(tenantid):
         overlays = db.overlays
         # Delete all the overlays in the collection
         logging.debug('Removing all overlays of tenant: %s' % tenantid)
-        success = overlays.delete_many(overlay).acknowledged
+        success = overlays.delete_many(filter).acknowledged
         if success:
             logging.debug('Overlays removed successfully')
         else:
@@ -992,7 +1177,7 @@ def add_slice_to_overlay(overlayid, _slice):
         success = overlays.update_one(
             query,
             {'$push': {'slices': _slice}}
-        ).acknowledged
+        ).matched_count == 1
         if success:
             logging.debug('Slice added to the overlay')
         else:
@@ -1022,7 +1207,7 @@ def add_many_slices_to_overlay(overlayid, slices):
         success = overlays.update_one(
             query,
             {'$pushAll': {'slices': slices}}
-        ).acknowledged
+        ).matched_count == 1
         if success:
             logging.debug('Slices added to the overlay')
         else:
@@ -1052,7 +1237,7 @@ def remove_slice_from_overlay(overlayid, _slice):
         success = overlays.update_one(
             query,
             {'$pull': {'slices': _slice}}
-        ).acknowledged
+        ).matched_count == 1
         if success:
             logging.debug('Slice removed from the overlay')
         else:
@@ -1082,7 +1267,7 @@ def remove_many_slices_from_overlay(overlayid, slices):
         success = overlays.update_one(
             query,
             {'$pullAll': {'slices': slices}}
-        ).acknowledged
+        ).matched_count == 1
         if success:
             logging.debug('Slices removed from the overlay')
         else:
@@ -1108,69 +1293,70 @@ def get_slices_in_overlay(overlayid):
     # Return the list of the slices if the overlay exists
     # None if the overlay does not exist
     # None if an error occurred during the connection to the db
-    return slices
+    return
 
 
-# Get the counter of a tunnel mode on a device and
-# increase the counter
-def get_and_inc_tunnel_mode_counter(tunnel_mode, deviceid):
+# Return the overlay which contains the slice,
+# None the slice is not assigned to any overlay
+def get_overlay_containing_slice(_slice, tenantid):
     # Build the query
-    query = {'deviceid': deviceid}
-    counter = None
+    query = {
+        'tenantid': tenantid,
+        'slices.deviceid': _slice['deviceid'],
+        'slices.interface_name': _slice['interface_name']
+    }
+    # Find the device
+    logging.debug('Checking if the slice %s (tenant %s) '
+                  'is assigned to an overlay' % (_slice, tenantid))
+    overlay = None
     try:
         # Get a reference to the MongoDB client
         client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
-        # Get the devices collection
-        devices = db.devices
-        # Find the device
-        logging.debug('Getting the device %s' % deviceid)
-        # Increase the counter for the tunnel mode
-        device = devices.find_one_and_update(
-            query, {'$inc': {'stats.counters.tunnel_mode.' + tunnel_mode: 1}}, upsert=True)
-        # Return the counter if exists, 0 otherwise
-        counter = device['stats']['counters']['tunnel_mode'].get(
-            tunnel_mode, 0)
-        logging.debug('Counter before the increment: %s' % counter)
+        # Get the overlays collection
+        overlays = db.overlays
+        # Find the overlays
+        overlay = overlays.find_one(query)
+        if overlay is not None:
+            logging.debug('Slice assigned to the overlay %s' % overlay)
+        else:
+            logging.debug('The slice is not assigned to any overlay')
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
-    # Return the counter if success,
-    # None if an error occurred during the connection to the db
-    return counter
+    # Return the overlay
+    return overlay
 
 
-# Decrease the counter of a tunnel mode on a device and
-# return the counter after the decrement
-def dec_and_get_tunnel_mode_counter(tunnel_mode, deviceid):
+# Return an overlay to which the device is partecipating,
+# None the device is not part of any overlay
+def get_overlay_containing_device(deviceid, tenantid):
     # Build the query
-    query = {'deviceid': deviceid}
-    counter = None
+    query = {
+        'tenantid': tenantid,
+        'slices.deviceid': deviceid
+    }
+    # Find the device
+    logging.debug('Checking if the device %s (tenant %s) '
+                  'is partecipating to some overlay' % (deviceid, tenantid))
+    overlay = None
     try:
         # Get a reference to the MongoDB client
         client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
-        # Get the devices collection
-        devices = db.devices
-        # Find the device
-        logging.debug('Getting the device %s' % deviceid)
-        # Decrease the counter for the tunnel mode
-        device = devices.find_one_and_update(
-            query, {'$inc': {'stats.counters.tunnel_mode.' + tunnel_mode: -1}},
-            return_document=ReturnDocument.AFTER)
-        # Return the counter
-        counter = device['stats']['counters']['tunnel_mode'][tunnel_mode]
-        logging.debug('Counter after the decrement: %s' % counter)
-        # If counter is 0, remove the tunnel mode from the device stats
-        if counter == 0:
-            devices.update_one(
-                query, {'$unset': {'stats.counters.tunnel_mode' + tunnel_mode: 1}})
+        # Get the overlays collection
+        overlays = db.overlays
+        # Find the overlays
+        overlay = overlays.find_one(query)
+        if overlay is not None:
+            logging.debug('Device is partecipating to the overlay %s' % overlay)
+        else:
+            logging.debug('The device is not partpartecipating to any overlay')
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
-    # Return the counter if success,
-    # None if an error occurred during the connection to the db
-    return counter
+    # Return the overlay
+    return overlay
 
 
 ''' Functions operating on the tenants collection '''
@@ -1272,7 +1458,7 @@ def get_tenantid(token):
 # Configure a tenant
 def configure_tenant(tenantid, tenant_info=None, vxlan_port=None):
     logging.debug('Configuring tenant %s (info %s, vxlan_port %s)'
-                    % (tenantid, tenant_info, vxlan_port))
+                  % (tenantid, tenant_info, vxlan_port))
     # Build the query
     query = {'tenantid': tenantid}
     # Build the update statement
@@ -1290,7 +1476,7 @@ def configure_tenant(tenantid, tenant_info=None, vxlan_port=None):
         # Get the tenants collection
         tenants = db.tenants
         # Configure the tenant
-        success = tenants.update_one(query, update).acknowledged
+        success = tenants.update_one(query, update).matched_count == 1
         if success:
             logging.debug('Tenant configured successfully')
         else:
@@ -1419,7 +1605,7 @@ def release_tableid(vpn_name, tenantid):
 # Device authentication
 def authenticate_device(token):
     tenantid = get_tenantid(token)
-    #return tenantid is not None, tenantid      # TODO for the future...
+    # return tenantid is not None, tenantid      # TODO for the future...
     return True, '1'
 
 

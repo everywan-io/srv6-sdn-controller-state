@@ -73,6 +73,7 @@ def register_device(deviceid, features, interfaces, mgmtip,
                 'tunnels': []
             }
         },
+        'vtep_ip_addr': None, 
         'registration_timestamp': str(datetime.datetime.utcnow())
     }
     # Register the device
@@ -948,10 +949,11 @@ def create_overlay(name, type, slices, tenantid, tunnel_mode):
     # Build the document
     overlay = {
         'name': name,
+        'tenantid': tenantid,
         'type': type,
         'slices': slices,
-        'tenantid': tenantid,
-        'tunnel_mode': tunnel_mode
+        'tunnel_mode': tunnel_mode,
+        'vni': None 
     }
     success = None
     try:
@@ -1462,7 +1464,15 @@ def configure_tenant(tenantid, tenant_info=None, vxlan_port=None):
     # Build the query
     query = {'tenantid': tenantid}
     # Build the update statement
-    update = {'$set': {'configured': True}}
+    update = {'$set': {
+        'configured': True, 
+        'vtep_ip_index': -1, 
+        'reu_vtep_ip_addr': [], 
+        'assigned_vtep_ip_addr': 0, 
+        'vni_index': -1, 
+        'reu_vni': [],
+        'assigned_vni': 0}
+        }
     if vxlan_port is not None:
         update['$set']['config.vxlan_port'] = vxlan_port
     if tenant_info is not None:

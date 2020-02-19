@@ -982,13 +982,16 @@ def get_num_tunnels(deviceid):
         logging.debug('Counting tunnels for device %s' % deviceid)
         # Get the device
         device = devices.find_one(query)
-        # Extract tunnel mode counter
-        counters = device['stats']['counters']['tunnels']
-        # Count the tunnels
-        num = 0
-        for tunnel_mode in counters:
-            num += tunnel_mode['counter']
-        logging.debug('%s tunnels found' % num)
+        if device is None:
+            logging.error('Device %s not found' % deviceid)
+        else:
+            # Extract tunnel mode counter
+            counters = device['stats']['counters']['tunnels']
+            # Count the tunnels
+            num = 0
+            for tunnel_mode in counters:
+                num += tunnel_mode['counter']
+            logging.debug('%s tunnels found' % num)
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the number of tunnels if success,

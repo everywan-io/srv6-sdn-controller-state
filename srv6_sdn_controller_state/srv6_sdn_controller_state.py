@@ -839,6 +839,62 @@ def set_device_enabled_flag(deviceid, enabled):
     return success
 
 
+# Mark the device as configured / unconfigured
+def set_device_configured_flag(deviceid, configured):
+    # Build the query
+    query = {'deviceid': deviceid}
+    # Build the update
+    update = {'$set': {'configured': configured}}
+    success = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the devices collection
+        devices = db.devices
+        # Change 'configured' flag
+        logging.debug('Change configured flag for device %s' % deviceid)
+        success = devices.update_one(query, update).matched_count == 1
+        if not success:
+            logging.error('Cannot change configured flag: device not found')
+        else:
+            logging.debug('Configured flag updated successfully')
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return True if success,
+    # False otherwise
+    return success
+
+
+# Set / unset 'connected' flag for a device
+def set_device_connected_flag(deviceid, connected):
+    # Build the query
+    query = {'deviceid': deviceid}
+    # Build the update
+    update = {'$set': {'connected': connected}}
+    success = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the devices collection
+        devices = db.devices
+        # Change 'connected' flag
+        logging.debug('Change connected flag for device %s' % deviceid)
+        success = devices.update_one(query, update).matched_count == 1
+        if not success:
+            logging.error('Cannot change connected flag: device not found')
+        else:
+            logging.debug('Connected flag updated successfully')
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return True if success,
+    # False otherwise
+    return success
+
+
 # Get the counter of a tunnel mode on a device and
 # increase the counter
 def get_and_inc_tunnel_mode_counter(tunnel_mode, deviceid):
@@ -927,13 +983,16 @@ def get_num_tunnels(deviceid):
         logging.debug('Counting tunnels for device %s' % deviceid)
         # Get the device
         device = devices.find_one(query)
-        # Extract tunnel mode counter
-        counters = device['stats']['counters']['tunnels']
-        # Count the tunnels
-        num = 0
-        for tunnel_mode in counters:
-            num += tunnel_mode['counter']
-        logging.debug('%s tunnels found' % num)
+        if device is None:
+            logging.error('Device %s not found' % deviceid)
+        else:
+            # Extract tunnel mode counter
+            counters = device['stats']['counters']['tunnels']
+            # Count the tunnels
+            num = 0
+            for tunnel_mode in counters:
+                num += tunnel_mode['counter']
+            logging.debug('%s tunnels found' % num)
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the number of tunnels if success,

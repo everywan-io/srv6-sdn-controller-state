@@ -113,7 +113,7 @@ def unregister_device(deviceid):
         # Get the devices collection
         devices = db.devices
         # Delete the device from the collection
-        success = devices.delete_one(device).deleted_count == 0
+        success = devices.delete_one(device).deleted_count == 1
         if success:
             logging.debug('Device unregistered successfully')
         else:

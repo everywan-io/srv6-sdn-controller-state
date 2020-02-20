@@ -73,7 +73,7 @@ def register_device(deviceid, features, interfaces, mgmtip,
                 'tunnels': []
             }
         },
-        'vtep_ip_addr': None, 
+        'vtep_ip_addr': None,
         'registration_timestamp': str(datetime.datetime.utcnow())
     }
     # Register the device
@@ -897,10 +897,7 @@ def set_device_connected_flag(deviceid, connected):
 
 # Get the counter of a tunnel mode on a device and
 # increase the counter
-def get_and_inc_tunnel_mode_counter(tunnel_mode, deviceid):
-    # Build the query
-    query = {'deviceid': deviceid,
-             'stats.counters.tunnels.tunnel_mode': tunnel_mode}
+def get_and_inc_tunnel_mode_counter(tunnel_name, deviceid):
     counter = None
     try:
         # Get a reference to the MongoDB client
@@ -911,16 +908,26 @@ def get_and_inc_tunnel_mode_counter(tunnel_mode, deviceid):
         devices = db.devices
         # Find the device
         logging.debug('Getting the device %s' % deviceid)
+        # Build query
+        query = {'deviceid': deviceid,
+                 'stats.counters.tunnels.tunnel_mode': {'$ne': tunnel_name}}
+        # Build the update
+        update = {'$push': {
+            'stats.counters.tunnels': {'tunnel_mode': tunnel_name, 'counter': 0}}}
         # If the counter does not exist, create it
-        devices.update_one({'deviceid': deviceid, 'stats.counters.tunnels.tunnel_mode': {'$ne': tunnel_mode}}, {'$push': {
-                           'stats.counters.tunnels': {'tunnel_mode': tunnel_mode, 'counter': 0}}})
+        devices.update_one(query, update)
+        # Build the query
+        query = {'deviceid': deviceid,
+                 'stats.counters.tunnels.tunnel_mode': tunnel_name}
+        # Build the update
+        update = {'$inc': {'stats.counters.tunnels.$.counter': 1}}
         # Increase the counter for the tunnel mode
         device = devices.find_one_and_update(
-            query, {'$inc': {'stats.counters.tunnels.$.counter': 1}}, upsert=True)
+            query, update)
         # Return the counter if exists, 0 otherwise
         counter = 0
         for tunnel_mode in device['stats']['counters']['tunnels']:
-            if tunnel_mode == tunnel_mode['tunnel_mode']:
+            if tunnel_name == tunnel_mode['tunnel_mode']:
                 counter = tunnel_mode['counter']
         logging.debug('Counter before the increment: %s' % counter)
     except pymongo.errors.ServerSelectionTimeoutError:
@@ -932,10 +939,10 @@ def get_and_inc_tunnel_mode_counter(tunnel_mode, deviceid):
 
 # Decrease the counter of a tunnel mode on a device and
 # return the counter after the decrement
-def dec_and_get_tunnel_mode_counter(tunnel_mode, deviceid):
+def dec_and_get_tunnel_mode_counter(tunnel_name, deviceid):
     # Build the query
     query = {'deviceid': deviceid,
-             'stats.counters.tunnels.tunnel_mode': tunnel_mode}
+             'stats.counters.tunnels.tunnel_mode': tunnel_name}
     counter = None
     try:
         # Get a reference to the MongoDB client
@@ -951,15 +958,18 @@ def dec_and_get_tunnel_mode_counter(tunnel_mode, deviceid):
             query, {'$inc': {'stats.counters.tunnels.$.counter': -1}},
             return_document=ReturnDocument.AFTER)
         # Return the counter
-        counter = 0
+        counter = -1
         for tunnel_mode in device['stats']['counters']['tunnels']:
-            if tunnel_mode == tunnel_mode['tunnel_mode']:
+            if tunnel_name == tunnel_mode['tunnel_mode']:
                 counter = tunnel_mode['counter']
+        if counter == -1:
+            logging.error('Cannot update counter')
         logging.debug('Counter after the decrement: %s' % counter)
         # If counter is 0, remove the tunnel mode from the device stats
         if counter == 0:
+            logging.debug('Counter set to 0, removing tunnel mode')
             devices.update_one(
-                query, {'$pull': {'stats.counters.tunnels': {'tunnel_mode': 'VXLAN'}}})
+                query, {'$pull': {'stats.counters.tunnels': {'tunnel_mode': tunnel_name}}})
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the counter if success,
@@ -1012,7 +1022,7 @@ def create_overlay(name, type, slices, tenantid, tunnel_mode):
         'type': type,
         'slices': slices,
         'tunnel_mode': tunnel_mode,
-        'vni': None 
+        'vni': None
     }
     success = None
     try:
@@ -1411,7 +1421,8 @@ def get_overlay_containing_device(deviceid, tenantid):
         # Find the overlays
         overlay = overlays.find_one(query)
         if overlay is not None:
-            logging.debug('Device is partecipating to the overlay %s' % overlay)
+            logging.debug(
+                'Device is partecipating to the overlay %s' % overlay)
         else:
             logging.debug('The device is not partpartecipating to any overlay')
     except pymongo.errors.ServerSelectionTimeoutError:
@@ -1524,14 +1535,14 @@ def configure_tenant(tenantid, tenant_info=None, vxlan_port=None):
     query = {'tenantid': tenantid}
     # Build the update statement
     update = {'$set': {
-        'configured': True, 
-        'vtep_ip_index': -1, 
-        'reu_vtep_ip_addr': [], 
-        'assigned_vtep_ip_addr': 0, 
-        'vni_index': -1, 
+        'configured': True,
+        'vtep_ip_index': -1,
+        'reu_vtep_ip_addr': [],
+        'assigned_vtep_ip_addr': 0,
+        'vni_index': -1,
         'reu_vni': [],
         'assigned_vni': 0}
-        }
+    }
     if vxlan_port is not None:
         update['$set']['config.vxlan_port'] = vxlan_port
     if tenant_info is not None:
@@ -1641,8 +1652,8 @@ def get_new_tableid(tenantid):
             if len(reusable_tenantids) == 0:
                 # No reusable ID, allocate a new table ID
                 tableid = tenants.find_one_and_update(
-                query, {'$inc': {'counters.tableid.last_tableid': 1}},
-                return_document=ReturnDocument.AFTER)
+                    query, {'$inc': {'counters.tableid.last_tableid': 1}},
+                    return_document=ReturnDocument.AFTER)
                 if tableid is not None:
                     logging.debug('Found table ID: %s' % tableid)
                     tableid = tenant['counters']['tableid']['last_tableid']

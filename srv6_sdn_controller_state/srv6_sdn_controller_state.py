@@ -912,7 +912,7 @@ def get_and_inc_tunnel_mode_counter(tunnel_mode, deviceid):
         # Find the device
         logging.debug('Getting the device %s' % deviceid)
         # If the counter does not exist, create it
-        devices.update_one({'deviceid': deviceid}, {'$addToSet': {
+        devices.update_one({'deviceid': deviceid, 'stats.counters.tunnels.tunnel_mode': {'$ne': tunnel_mode}}, {'$push': {
                            'stats.counters.tunnels': {'tunnel_mode': tunnel_mode, 'counter': 0}}})
         # Increase the counter for the tunnel mode
         device = devices.find_one_and_update(
@@ -1618,7 +1618,6 @@ def tenant_exists(tenantid):
     return tenant_exists
 
 
-'''
 # Allocate and return a new table ID for a overlay
 def get_new_tableid(tenantid):
     # Build the query
@@ -1630,23 +1629,96 @@ def get_new_tableid(tenantid):
     # Get the tenants collection
     tenants = db.tenants
     # Get a new table ID
+    tableid = None
     logging.debug('Getting new table ID for the tenant %s' % tenantid)
-    tableid = tenants.find_one_and_update(
-        query, {'$inc': {'counters.last_tableid': 1}},
-        upsert=True,
-        return_document=ReturnDocument.AFTER)['counters']['last_tableid']
+    try:
+        # Check if a reusable table ID is available
+        tenant = tenants.find_one(query)
+        if tenant is None:
+            logging.debug('The tenant does not exist')
+        else:
+            reusable_tenantids = tenant['counters']['tableid']['reusable_tableids']
+            if len(reusable_tenantids) == 0:
+                # No reusable ID, allocate a new table ID
+                tableid = tenants.find_one_and_update(
+                query, {'$inc': {'counters.tableid.last_tableid': 1}},
+                return_document=ReturnDocument.AFTER)
+                if tableid is not None:
+                    logging.debug('Found table ID: %s' % tableid)
+                    tableid = tenant['counters']['tableid']['last_tableid']
+                else:
+                    logging.error('Error in get_new_tableid')
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
     # Return the table ID
     return tableid
 
 
+# Release a table ID and mark it as reusable
+def release_tableid(overlayid, tenantid):
+    # Build the query
+    query = {'tenantid': tenantid, '_id': overlayid}
+    # Get a reference to the MongoDB client
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Get the overlays collection
+    overlays = db.overlays
+    # Release the table ID
+    logging.debug('Release table ID assigned to the overlay %s (%s)'
+                  % (overlayid, tenantid))
+    success = None
+    try:
+        # Get the overlay
+        tenant = overlays.find_one(query)
+        # Get the table ID assigned to the overlay
+        tableid = tenant.get('tableid')
+        if tableid is None:
+            logging.error('No table ID assigned to the overlay')
+        else:
+            # Build the update
+            update = {'$unset': {'tableid': 1}}
+            # Release the table ID
+            success = overlays.update_one(query, update).modified_count == 1
+            if success is False:
+                logging.error('Cannot release table ID')
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return True if success,
+    # False if failure,
+    # None if an error occurred during the connection to the db
+    return success
+
+
 # Return the table ID assigned to the VPN
-# If the VPN has no assigned table IDs, return -1
-def get_tableid(overlay_name, tenantid):
-    if tenantid not in self.vpn_to_tableid:
-        return -1
-    return self.vpn_to_tableid[tenantid].get(vpn_name, -1)
+# If the VPN has no assigned table IDs, return None
+def get_tableid(overlayid, tenantid):
+    # Build the query
+    query = {'tenantid': tenantid, '_id': overlayid}
+    # Get a reference to the MongoDB client
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Get the overlays collection
+    overlays = db.overlays
+    # Release the table ID
+    logging.debug('Get table ID for the overlay %s (%s)'
+                  % (overlayid, tenantid))
+    tableid = None
+    try:
+        # Get the overlay
+        tenant = overlays.find_one(query)
+        # Get the table ID assigned to the overlay
+        tableid = tenant.get('tableid')
+        if tableid is None:
+            logging.error('No table ID assigned to the overlay')
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return the table ID or None if error
+    return tableid
 
 
+'''
 # Release a table ID and mark it as reusable
 def release_tableid(vpn_name, tenantid):
     # Check if the VPN has an associated table ID

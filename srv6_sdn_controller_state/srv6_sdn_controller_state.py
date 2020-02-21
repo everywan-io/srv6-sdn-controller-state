@@ -1050,14 +1050,10 @@ def create_overlay(name, type, slices, tenantid, tunnel_mode):
     # Return
     return overlayid
 
-
-# Remove overlay by ID or by tenantid and overlay name
-def remove_overlay(overlayid=None, tenantid=None, overlay_name=None):
+# Remove overlay by ID 
+def remove_overlay(overlayid):
     # Build the filter
-    if overlayid is not None:
-        overlay = {'_id': ObjectId(overlayid)}
-    if tenantid is not None and overlay_name is not None:
-        overlay = {'tenantid': tenantid, 'name': overlay_name}
+    overlay = {'_id': ObjectId(overlayid)}
     success = None
     try:
         # Get a reference to the MongoDB client

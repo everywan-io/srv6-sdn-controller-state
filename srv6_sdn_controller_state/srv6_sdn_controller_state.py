@@ -9,6 +9,7 @@ import logging
 import urllib.parse
 from ipaddress import IPv4Interface, IPv6Interface
 from srv6_sdn_controller_state import utils
+from ipaddress import IPv4Network
 
 
 # Global variables
@@ -24,6 +25,10 @@ LOCAL_SID_TABLE = 1
 # Reserved table IDs
 RESERVED_TABLEIDS = [0, 253, 254, 255]
 RESERVED_TABLEIDS.append(LOCAL_SID_TABLE)
+# Reserved VNI
+RESERVED_VNI = [0, 1]
+# Reserved VTEP IP address
+RESERVED_VTEP_IP = [0, 65536]
 
 # Set logging level
 logging.basicConfig(level=logging.DEBUG)
@@ -1676,14 +1681,16 @@ def get_new_tableid(tenantid):
                 while True:
                     # No reusable ID, allocate a new table ID
                     tenant = tenants.find_one_and_update(
-                        query, {'$inc': {'counters.tableid.last_allocated_tableid': 1}},
+                        query, {
+                            '$inc': {'counters.tableid.last_allocated_tableid': 1}},
                         return_document=ReturnDocument.AFTER)
                     if tenant is not None:
                         tableid = tenant['counters']['tableid']['last_allocated_tableid']
                         if tableid not in RESERVED_TABLEIDS:
                             logging.debug('Found table ID: %s' % tableid)
                             break
-                        logging.debug('Table ID %s is reserved. Getting new table ID' % tableid)
+                        logging.debug(
+                            'Table ID %s is reserved. Getting new table ID' % tableid)
                     else:
                         logging.error('Error in get_new_tableid')
                         break
@@ -1716,7 +1723,8 @@ def release_tableid(tableid, tenantid):
             reusable_tableids = tenant['counters']['tableid']['reusable_tableids']
             # Add the table ID to the reusable table IDs list
             reusable_tableids.append(tableid)
-            update = {'$set': {'counters.tableid.reusable_tableids': reusable_tableids}}
+            update = {
+                '$set': {'counters.tableid.reusable_tableids': reusable_tableids}}
             if tenants.update_one(query, update).modified_count != 1:
                 logging.error('Error while updating reusable table IDs list')
                 success = False
@@ -1822,6 +1830,226 @@ def authenticate_device(token):
     tenantid = get_tenantid(token)
     # return tenantid is not None, tenantid      # TODO for the future...
     return True, '1'
+
+
+# Allocate and return a new VNI for the overlay
+def get_new_vni(overlay_name, tenantid):
+    # Get reference to mongo DB client
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Get overlays collection
+    overlays = db.overlays
+    # Get tenants collection
+    tenants = db.tenants
+    # The overlay of the considered tenant already has a VNI
+    if overlays.find_one({'name': overlay_name, 'tenantid': tenantid}, {'vni': 1})['vni'] != None:
+        return -1
+    # Overlay does not have a VNI
+    else:
+        # Check if a reusable VNI is available
+        if not tenants.find_one({'tenantid': tenantid, 'reu_vni': {'$size': 0}}):
+            # Pop vni from the array
+            vnis = tenants.find_one({
+                'tenantid': tenantid})['reu_vni']
+            vni = vnis.pop()
+            tenants.find_one_and_update({
+                'tenantid': tenantid}, {'$set': {'reu_vni': vnis}})
+        else:
+            # If not, get a new VNI
+            tenants.find_one_and_update({
+                'tenantid': tenantid}, {'$inc': {'vni_index': +1}})
+            while tenants.find_one({'tenantid': tenantid}, {'vni_index': 1})['vni_index'] in RESERVED_VNI:
+                # Skip reserved VNI
+                tenants.find_one_and_update({
+                    'tenantid': tenantid}, {'$inc': {'vni_index': +1}})
+            # Get VNI
+            vni = tenants.find_one({
+                'tenantid': tenantid}, {'vni_index': 1})['vni_index']
+        # Assign the VNI to the overlay
+        overlays.find_one_and_update({
+            'tenantid': tenantid,
+            'name': overlay_name}, {
+            '$set': {'vni': vni}
+        }
+        )
+        # Increase assigned VNIs counter
+        tenants.find_one_and_update({
+            'tenantid': tenantid}, {'$inc': {'assigned_vni': +1}})
+        # And return
+        return vni
+
+
+# Return the VNI assigned to the Overlay
+# If the Overlay has no assigned VNI, return -1
+def get_vni(overlay_name, tenantid):
+    # Get reference to mongo DB client
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Get overlays collection
+    overlays = db.overlays
+    # Get VNI
+    vni = overlays.find_one({
+        'name': overlay_name, 'tenantid': tenantid}, {'vni': 1})['vni']
+    if vni == None:
+        return -1
+    else:
+        return vni
+
+
+# Release VNI and mark it as reusable
+def release_vni(overlay_name, tenantid):
+    # Get reference to mongo DB client
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Get overlays collection
+    overlays = db.overlays
+    # Get tenants collection
+    tenants = db.tenants
+    # Check if the overlay has an associated VNI
+    vni = overlays.find_one({
+        'name': overlay_name, 'tenantid': tenantid}, {'vni': 1})['vni']
+    # If VNI is valid
+    if vni != None:
+        # Unassign the VNI
+        overlays.find_one_and_update({
+            'tenantid': tenantid,
+            'name': overlay_name}, {
+            '$set': {'vni': None}
+        }
+        )
+        # Decrease assigned VNIs counter
+        tenants.find_one_and_update({
+            'tenantid': tenantid}, {'$inc': {'assigned_vni': -1}})
+        # Mark the VNI as reusable
+        tenants.update_one({
+            'tenantid': tenantid}, {'$push': {'reu_vni': vni}})
+        # If the tenant has no overlays
+        if tenants.find_one({'tenantid': tenantid}, {'assigned_vni': 1})['assigned_vni'] == 0:
+            # reset counter
+            tenants.find_one_and_update({
+                'tenantid': tenantid}, {'$set': {'vni_index': -1}})
+            # empty reusable VNI list
+            tenants.find_one_and_update({
+                'tenantid': tenantid}, {'$set': {'reu_vni': []}})
+        return vni
+    else:
+        # The overlay has not associated VNI
+        return -1
+
+
+def get_new_vtep_ip(dev_id, tenantid):
+    # Get the collections
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Devices collection
+    devices = db.devices
+    # Tenants collection
+    tenants = db.tenants
+    # ip address availale
+    ip = IPv4Network('198.18.0.0/16')
+    network_mask = 16
+    # The device of the considered tenant already has an associated VTEP IP
+    if devices.find_one({'deviceid': dev_id, 'tenantid': tenantid}, {'vtep_ip_addr': 1})['vtep_ip_addr'] != None:
+        return -1
+    # The device does not have a VTEP IP address
+    else:
+        # Check if a reusable VTEP IP is available
+        if not tenants.find_one({'tenantid': tenantid, 'reu_vtep_ip_addr': {'$size': 0}}):
+            # Pop VTEP IP adress from the array
+            vtep_ips = tenants.find_one({
+                'tenantid': tenantid})['reu_vtep_ip_addr']
+            vtep_ip = vtep_ips.pop()
+            tenants.find_one_and_update({
+                'tenantid': tenantid}, {'$set': {'reu_vtep_ip_addr': vtep_ips}})
+        else:
+            # If not, get a VTEP IP address
+            tenants.find_one_and_update({
+                'tenantid': tenantid}, {'$inc': {'vtep_ip_index': +1}})
+            while tenants.find_one({'tenantid': tenantid}, {'vtep_ip_index': 1})['vtep_ip_index'] in RESERVED_VTEP_IP:
+                # Skip reserved VTEP IP address
+                tenants.find_one_and_update({
+                    'tenantid': tenantid}, {'$inc': {'vtep_ip_index': +1}})
+            # Get IP address
+            ip_index = tenants.find_one({
+                'tenantid': tenantid}, {'vtep_ip_index': 1})['vtep_ip_index']
+            vtep_ip = "%s/%s" % (ip[ip_index], network_mask)
+        # Assign the VTEP IP address to the device
+        devices.find_one_and_update({
+            'tenantid': tenantid,
+            'deviceid': dev_id}, {
+            '$set': {'vtep_ip_addr': vtep_ip}
+        }
+        )
+        # Increase assigned VTEP IP addr counter
+        tenants.find_one_and_update({
+            'tenantid': tenantid}, {'$inc': {'assigned_vtep_ip_addr': +1}})
+        # And return
+        return vtep_ip
+
+
+# Return VTEP IP adress assigned to the device
+# If device has no VTEP IP address return -1
+def get_vtep_ip(dev_id, tenantid):
+    # Get the collections
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Devices collection
+    devices = db.devices
+    # Get VTEP IP
+    vtep_ip = devices.find_one({
+        'deviceid': dev_id, 'tenantid': tenantid}, {'vtep_ip_addr': 1})['vtep_ip_addr']
+    if vtep_ip == None:
+        return -1
+    else:
+        return vtep_ip
+
+
+# Release VTEP IP and mark it as reusable
+def release_vtep_ip(dev_id, tenantid):
+    # Get the collections
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Devices collection
+    devices = db.devices
+    # Tenants collection
+    tenants = db.tenants
+    # Get device VTEP IP address
+    vtep_ip = devices.find_one({
+        'deviceid': dev_id, 'tenantid': tenantid}, {'vtep_ip_addr': 1})['vtep_ip_addr']
+    # If IP address is valid
+    if vtep_ip != None:
+        # Unassign the VTEP IP addr
+        devices.find_one_and_update({
+            'tenantid': tenantid,
+            'deviceid': dev_id}, {
+            '$set': {'vtep_ip_addr': None}
+        }
+        )
+        # Decrease assigned VTEP IP addr counter
+        tenants.find_one_and_update({
+            'tenantid': tenantid}, {'$inc': {'assigned_vtep_ip_addr': -1}})
+        # Mark the VTEP IP addr as reusable
+        tenants.update_one({
+            'tenantid': tenantid}, {'$push': {'reu_vtep_ip_addr': vtep_ip}})
+        # If all addresses have been released
+        if tenants.find_one({'tenantid': tenantid}, {'assigned_vtep_ip_addr': 1})['assigned_vtep_ip_addr'] == 0:
+            # reset the counter
+            tenants.find_one_and_update({
+                'tenantid': tenantid}, {'$set': {'vtep_ip_index': -1}})
+            # empty reusable address list
+            tenants.find_one_and_update({
+                'tenantid': tenantid}, {'$set': {'reu_vtep_ip_addr': []}})
+        # Return the VTEP IP
+        return vtep_ip
+    else:
+        # The device has no associeted VTEP IP
+        return -1
 
 
 """ Topology """

@@ -1055,7 +1055,8 @@ def create_overlay(name, type, slices, tenantid, tunnel_mode):
     # Return
     return overlayid
 
-# Remove overlay by ID 
+
+# Remove overlay by ID
 def remove_overlay(overlayid):
     # Build the filter
     overlay = {'_id': ObjectId(overlayid)}
@@ -1080,6 +1081,8 @@ def remove_overlay(overlayid):
     return success
 
 # Remove all the overlays
+
+
 def remove_all_overlays():
     success = None
     try:
@@ -1679,14 +1682,16 @@ def get_new_tableid(tenantid):
                 while True:
                     # No reusable ID, allocate a new table ID
                     tenant = tenants.find_one_and_update(
-                        query, {'$inc': {'counters.tableid.last_allocated_tableid': 1}},
+                        query, {
+                            '$inc': {'counters.tableid.last_allocated_tableid': 1}},
                         return_document=ReturnDocument.AFTER)
                     if tenant is not None:
                         tableid = tenant['counters']['tableid']['last_allocated_tableid']
                         if tableid not in RESERVED_TABLEIDS:
                             logging.debug('Found table ID: %s' % tableid)
                             break
-                        logging.debug('Table ID %s is reserved. Getting new table ID' % tableid)
+                        logging.debug(
+                            'Table ID %s is reserved. Getting new table ID' % tableid)
                     else:
                         logging.error('Error in get_new_tableid')
                         break
@@ -1719,7 +1724,8 @@ def release_tableid(tableid, tenantid):
             reusable_tableids = tenant['counters']['tableid']['reusable_tableids']
             # Add the table ID to the reusable table IDs list
             reusable_tableids.append(tableid)
-            update = {'$set': {'counters.tableid.reusable_tableids': reusable_tableids}}
+            update = {
+                '$set': {'counters.tableid.reusable_tableids': reusable_tableids}}
             if tenants.update_one(query, update).modified_count != 1:
                 logging.error('Error while updating reusable table IDs list')
                 success = False
@@ -1826,9 +1832,10 @@ def authenticate_device(token):
     # return tenantid is not None, tenantid      # TODO for the future...
     return True, '1'
 
+
 # Allocate and return a new VNI for the overlay
 def get_new_vni(overlay_name, tenantid):
-    # Get reference to mongo DB client 
+    # Get reference to mongo DB client
     client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
@@ -1873,10 +1880,11 @@ def get_new_vni(overlay_name, tenantid):
         # And return
         return vni
 
+
 # Return the VNI assigned to the Overlay
 # If the Overlay has no assigned VNI, return -1
 def get_vni(overlay_name, tenantid):
-    # Get reference to mongo DB client 
+    # Get reference to mongo DB client
     client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
@@ -1890,9 +1898,10 @@ def get_vni(overlay_name, tenantid):
     else:
         return vni
 
+
 # Release VNI and mark it as reusable
 def release_vni(overlay_name, tenantid):
-    # Get reference to mongo DB client 
+    # Get reference to mongo DB client
     client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
@@ -1930,6 +1939,7 @@ def release_vni(overlay_name, tenantid):
     else:
         # The overlay has not associated VNI
         return -1
+
 
 def get_new_vtep_ip(dev_id, tenantid):
     # Get the collections
@@ -1981,6 +1991,7 @@ def get_new_vtep_ip(dev_id, tenantid):
         # And return
         return vtep_ip
 
+
 # Return VTEP IP adress assigned to the device
 # If device has no VTEP IP address return -1
 def get_vtep_ip(dev_id, tenantid):
@@ -1997,6 +2008,7 @@ def get_vtep_ip(dev_id, tenantid):
         return -1
     else:
         return vtep_ip
+
 
 # Release VTEP IP and mark it as reusable
 def release_vtep_ip(dev_id, tenantid):
@@ -2040,7 +2052,9 @@ def release_vtep_ip(dev_id, tenantid):
         # The device has no associeted VTEP IP
         return -1
 
+
 """ Topology """
+
 
 # Return the topology
 def get_topology():

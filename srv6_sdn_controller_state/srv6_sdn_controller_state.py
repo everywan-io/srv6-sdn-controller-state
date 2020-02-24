@@ -1080,9 +1080,8 @@ def remove_overlay(overlayid):
     # Return True if success, False otherwise
     return success
 
+
 # Remove all the overlays
-
-
 def remove_all_overlays():
     success = None
     try:

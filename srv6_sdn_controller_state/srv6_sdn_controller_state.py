@@ -77,6 +77,9 @@ def register_device(deviceid, features, interfaces, mgmtip,
         'tunnel_mode': None,
         'tunnel_info': None,
         'nat_type': None,
+        'device_external_ip': None,
+        'device_external_port': None,
+        'vxlan_port': None,
         'connected': True,
         'configured': False,
         'enabled': False,
@@ -185,7 +188,9 @@ def unregister_all_devices():
 
 
 # Update tunnel mode
-def update_tunnel_mode(deviceid, mgmtip, interfaces, tunnel_mode, nat_type):
+def update_tunnel_mode(deviceid, mgmtip, interfaces, tunnel_mode, nat_type,
+                       device_external_ip, device_external_port,
+                       device_vtep_mac, vxlan_port):
     # Build the query
     query = [{'deviceid': deviceid}]
     for interface in interfaces:
@@ -194,7 +199,11 @@ def update_tunnel_mode(deviceid, mgmtip, interfaces, tunnel_mode, nat_type):
     update = [{
         '$set': {'mgmtip': mgmtip,
                  'tunnel_mode': tunnel_mode,
-                 'nat_type': nat_type}
+                 'nat_type': nat_type,
+                 'external_ip': device_external_ip,
+                 'external_port': device_external_port,
+                 'mgmt_mac': device_vtep_mac,
+                 'vxlan_port': vxlan_port}
     }]
     for interface in interfaces.values():
         update.append({

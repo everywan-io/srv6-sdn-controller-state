@@ -9,7 +9,6 @@ import logging
 import urllib.parse
 from ipaddress import IPv4Interface, IPv6Interface, IPv4Network, IPv6Network
 from srv6_sdn_controller_state import utils
-from ipaddress import IPv4Network
 import itertools
 
 
@@ -1096,7 +1095,7 @@ def get_device_vtep_mac(deviceid):
         # Find the device
         logging.debug('Get device %s VTEP MAC address' % deviceid)
         # Get the device
-        res = devices.find_one(query)['vtep_mac']
+        res = devices.find_one(query)['mgmt_mac']
         if res is None:
             logging.error('Device not found')
         else:
@@ -1105,6 +1104,42 @@ def get_device_vtep_mac(deviceid):
         logging.error('Cannot establish a connection to the db')
     # Return the device VTEP MAC address
     return res
+
+
+def get_tunnel_mode(deviceid):
+    device = get_device(deviceid)
+    if device is None:
+        return None
+    return device['tunnel_mode']
+    
+    
+def set_tunnel_mode(deviceid, tunnel_mode):
+    # Build the query
+    query = {'deviceid': deviceid}
+    # Build the update
+    update = {'$set': {'tunnel_mode': tunnel_mode}}
+    success = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the devices collection
+        devices = db.devices
+        # Find the device
+        logging.debug('Update device %s tunnel mode' % deviceid)
+        logging.debug('New tunnel mode: %s' % tunnel_mode)
+        # Get the device
+        success = devices.update_one(query, update).matched_count == 1
+        if not success:
+            logging.error('Cannot update tunnel mode')
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return True if success,
+    # False if failure,
+    # None if error occurred in connection to the db
+    return success
+    
 
 
 ''' Functions operating on the overlays collection '''
@@ -1941,7 +1976,7 @@ def get_new_mgmt_ipv4(deviceid):
                 mgmtip = reusable_ipv4_addresses.pop()
                 # Remove the mgmt IP from the reusable_ipv4_addresses list
                 update = {
-                    '$set': {'counters.mgmt_address_ipv4.reusable_addrs': reusable_ipv4_addresses}}
+                    '$set': {'mgmt_address_ipv4.reusable_addrs': reusable_ipv4_addresses}}
                 if config.update_one(query, update).modified_count != 1:
                     logging.error(
                         'Error while updating reusable mgmt IPs list')
@@ -2018,7 +2053,7 @@ def get_new_mgmt_ipv6(deviceid):
 
 
 # Release the IPv4 address associated to the device
-def release_ipv4_address(addr):
+def release_ipv4_address(deviceid):
     # Build the query
     query = {'config': 'mgmt_counters'}
     # Get a reference to the MongoDB client
@@ -2028,26 +2063,34 @@ def release_ipv4_address(addr):
     # Get the configuration collection
     config = db.configuration
     # Release the IPv4 adddress
-    logging.debug('Release IPv4 address %s for tenant %s'
-                  % (addr, tenantid))
+    logging.debug('Release IPv4 address for device %s'
+                  % deviceid)
     success = None
     try:
-        # Get the tenant
-        mgmt_counters = config.find_one(query)
-        if mgmt_counters is None:
-            logging.debug('The mgmt_counters does not exist')
-        else:
-            reusable_addrs = mgmt_counters['mgmt_address_ipv4']['reusable_addrs']
-            # Add the mgmt IPv4 to the reusable addresses list
-            reusable_addrs.append(addr)
-            update = {
-                '$set': {'mgmt_address_ipv4.reusable_addrs': reusable_addrs}}
-            if config.update_one(query, update).modified_count != 1:
-                logging.error('Error while updating reusable mgmt IPs list')
-                success = False
+        # Find the device
+        device = get_device(deviceid)
+        if device is not None:
+            # Get the mgmtip
+            mgmtip = device['mgmtip']
+            # Get the tenant
+            mgmt_counters = config.find_one(query)
+            if mgmt_counters is None:
+                logging.debug('The mgmt_counters does not exist')
             else:
-                logging.debug('Mgmt IP added to reusable_addrs list')
-                success = True
+                reusable_addrs = mgmt_counters['mgmt_address_ipv4']['reusable_addrs']
+                prefixlen = mgmt_counters['mgmt_address_ipv4']['mgmt_net'].split('/')[1]
+                # Add the mgmt IPv4 to the reusable addresses list
+                reusable_addrs.append(mgmtip + '/' + str(prefixlen))
+                update = {
+                    '$set': {'mgmt_address_ipv4.reusable_addrs': reusable_addrs}}
+                if config.update_one(query, update).modified_count != 1:
+                    logging.error('Error while updating reusable mgmt IPs list')
+                    success = False
+                else:
+                    logging.debug('Mgmt IP added to reusable_addrs list')
+                    success = True
+        else:
+            logging.error('Device not found')
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return True if success,
@@ -2057,7 +2100,7 @@ def release_ipv4_address(addr):
 
 
 # Release the IPv6 address associated to the device
-def release_ipv6_address(addr):
+def release_ipv6_address(deviceid):
     # Build the query
     query = {'config': 'mgmt_counters'}
     # Get a reference to the MongoDB client
@@ -2067,26 +2110,34 @@ def release_ipv6_address(addr):
     # Get the configuration collection
     config = db.configuration
     # Release the IPv6 adddress
-    logging.debug('Release IPv6 address %s for tenant %s'
-                  % (addr, tenantid))
+    logging.debug('Release IPv6 address device %s'
+                  % deviceid)
     success = None
     try:
-        # Get the tenant
-        mgmt_counters = config.find_one(query)
-        if mgmt_counters is None:
-            logging.debug('The mgmt_counters does not exist')
-        else:
-            reusable_addrs = tenant['counters']['mgmt_address_ipv6']['reusable_addrs']
-            # Add the mgmt IPv6 to the reusable addresses list
-            reusable_addrs.append(addr)
-            update = {
-                '$set': {'mgmt_address_ipv6.reusable_addrs': reusable_addrs}}
-            if config.update_one(query, update).modified_count != 1:
-                logging.error('Error while updating reusable mgmt IPs list')
-                success = False
+        # Find the device
+        device = get_device(deviceid)
+        if device is not None:
+            # Get the mgmtip
+            mgmtip = device['mgmtip']
+            # Get the counters
+            mgmt_counters = config.find_one(query)
+            if mgmt_counters is None:
+                logging.debug('The mgmt_counters does not exist')
             else:
-                logging.debug('Mgmt IP added to reusable_addrs list')
-                success = True
+                reusable_addrs = mgmt_counters['mgmt_address_ipv6']['reusable_addrs']
+                prefixlen = mgmt_counters['mgmt_address_ipv6']['mgmt_net'].split('/')[1]
+                # Add the mgmt IPv6 to the reusable addresses list
+                reusable_addrs.append(mgmtip + '/' + str(prefixlen))
+                update = {
+                    '$set': {'mgmt_address_ipv6.reusable_addrs': reusable_addrs}}
+                if config.update_one(query, update).modified_count != 1:
+                    logging.error('Error while updating reusable mgmt IPs list')
+                    success = False
+                else:
+                    logging.debug('Mgmt IP added to reusable_addrs list')
+                    success = True
+        else:
+            logging.error('Device not found')
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return True if success,
@@ -2196,7 +2247,7 @@ def get_new_mgmt_ipv6_net(deviceid):
 
 
 # Release the IPv4 net associated to the device
-def release_ipv4_net(net):
+def release_ipv4_net(deviceid):
     # Build the query
     query = {'config': 'mgmt_counters'}
     # Get a reference to the MongoDB client
@@ -2206,25 +2257,32 @@ def release_ipv4_net(net):
     # Get the configuration collection
     config = db.configuration
     # Release the IPv4 net
-    logging.debug('Release IPv4 net %s' % net)
+    logging.debug('Release IPv4 for device %s' % deviceid)
     success = None
     try:
-        # Get the mgmt_counters
-        mgmt_counters = config.find_one(query)
-        if mgmt_counters is None:
-            logging.debug('The mgmt_counters does not exist')
-        else:
-            reusable_nets = mgmt_counters['mgmt_net_ipv4']['reusable_subnets']
-            # Add the mgmt IPv4 to the reusable nets list
-            reusable_nets.append(net)
-            update = {
-                '$set': {'mgmt_net_ipv4.reusable_nets': reusable_nets}}
-            if config.update_one(query, update).modified_count != 1:
-                logging.error('Error while updating reusable mgmt IPs list')
-                success = False
+        # Find the device
+        device = get_device(deviceid)
+        if device is not None:
+            # Get the mgmtip
+            mgmtip = device['mgmtip']
+            # Get the mgmt_counters
+            mgmt_counters = config.find_one(query)
+            if mgmt_counters is None:
+                logging.debug('The mgmt_counters does not exist')
             else:
-                logging.debug('Mgmt IP added to reusable_nets list')
-                success = True
+                reusable_nets = mgmt_counters['mgmt_subnet_ipv4']['reusable_subnets']
+                # Add the mgmt IPv4 to the reusable nets list
+                reusable_nets.append(IPv4Interface(mgmtip + '/30').network)
+                update = {
+                    '$set': {'mgmt_subnet_ipv4.reusable_nets': reusable_nets}}
+                if config.update_one(query, update).modified_count != 1:
+                    logging.error('Error while updating reusable mgmt IPs list')
+                    success = False
+                else:
+                    logging.debug('Mgmt IP added to reusable_nets list')
+                    success = True
+        else:
+            logging.error('Device not found')
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return True if success,
@@ -2234,7 +2292,7 @@ def release_ipv4_net(net):
 
 
 # Release the IPv6 net associated to the device
-def release_ipv6_net(net):
+def release_ipv6_net(deviceid):
     # Build the query
     query = {'config': 'mgmt_counters'}
     # Get a reference to the MongoDB client
@@ -2247,22 +2305,29 @@ def release_ipv6_net(net):
     logging.debug('Release IPv6 net %s' % net)
     success = None
     try:
-        # Get the mgmt_counters
-        mgmt_counters = config.find_one(query)
-        if mgmt_counters is None:
-            logging.debug('The mgmt_counters does not exist')
-        else:
-            reusable_nets = mgmt_counters['mgmt_net_ipv6']['reusable_subnets']
-            # Add the mgmt IPv6 to the reusable nets list
-            reusable_nets.append(net)
-            update = {
-                '$set': {'mgmt_net_ipv6.reusable_nets': reusable_nets}}
-            if config.update_one(query, update).modified_count != 1:
-                logging.error('Error while updating reusable mgmt IPs list')
-                success = False
+        # Find the device
+        device = get_device(deviceid)
+        if device is not None:
+            # Get the mgmtip
+            mgmtip = device['mgmtip']
+            # Get the mgmt_counters
+            mgmt_counters = config.find_one(query)
+            if mgmt_counters is None:
+                logging.debug('The mgmt_counters does not exist')
             else:
-                logging.debug('Mgmt IP added to reusable_nets list')
-                success = True
+                reusable_nets = mgmt_counters['mgmt_subnet_ipv6']['reusable_subnets']
+                # Add the mgmt IPv6 to the reusable nets list
+                reusable_nets.append(IPv6Interface(mgmtip + '/30').network)
+                update = {
+                    '$set': {'mgmt_subnet_ipv6.reusable_nets': reusable_nets}}
+                if config.update_one(query, update).modified_count != 1:
+                    logging.error('Error while updating reusable mgmt IPs list')
+                    success = False
+                else:
+                    logging.debug('Mgmt IP added to reusable_nets list')
+                    success = True
+        else:
+            logging.error('Device not found')
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return True if success,

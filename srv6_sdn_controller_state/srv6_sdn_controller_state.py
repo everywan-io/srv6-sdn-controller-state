@@ -188,8 +188,8 @@ def unregister_all_devices():
 
 # Update management information
 def update_mgmt_info(deviceid, mgmtip, interfaces, tunnel_mode, nat_type,
-                       device_external_ip, device_external_port,
-                       device_vtep_mac, vxlan_port):
+                     device_external_ip, device_external_port,
+                     device_vtep_mac, vxlan_port):
     # Build the query
     query = [{'deviceid': deviceid}]
     for interface in interfaces:
@@ -1119,8 +1119,8 @@ def get_tunnel_mode(deviceid):
     if device is None:
         return None
     return device['tunnel_mode']
-    
-    
+
+
 def set_tunnel_mode(deviceid, tunnel_mode):
     # Build the query
     query = {'deviceid': deviceid}
@@ -1147,7 +1147,6 @@ def set_tunnel_mode(deviceid, tunnel_mode):
     # False if failure,
     # None if error occurred in connection to the db
     return success
-    
 
 
 ''' Functions operating on the overlays collection '''
@@ -1868,7 +1867,7 @@ def release_tableid(overlayid, tenantid):
                 overlayid, tenantid, tableid)
             if success is not True:
                 logging.error('Error while removing table ID %s from the '
-                            'overlay %s' % (tableid, overlayid))
+                              'overlay %s' % (tableid, overlayid))
                 success = False
             else:
                 # Get the overlay
@@ -1882,10 +1881,12 @@ def release_tableid(overlayid, tenantid):
                     update = {
                         '$set': {'counters.tableid.reusable_tableids': reusable_tableids}}
                     if tenants.update_one(query, update).modified_count != 1:
-                        logging.error('Error while updating reusable table IDs list')
+                        logging.error(
+                            'Error while updating reusable table IDs list')
                         success = False
                     else:
-                        logging.debug('Table ID added to reusable_tableids list')
+                        logging.debug(
+                            'Table ID added to reusable_tableids list')
                         success = True
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
@@ -1953,7 +1954,7 @@ def assign_tableid_to_overlay(overlayid, tenantid, tableid):
 
 
 # Remove a table ID from an overlay
-def remove_tableid_from_overlay(overlayid, tenantid, tableid): 
+def remove_tableid_from_overlay(overlayid, tenantid, tableid):
     # TODO check if tableid is assigned to the overlay
     #
     # Build the query
@@ -2020,7 +2021,8 @@ def get_new_mgmt_ipv4(deviceid):
                     mgmtip = None
             else:
                 # No reusable IPv4, allocate a new mgmt IPv4 address
-                net = IPv4Network(mgmt_counters['mgmt_address_ipv4']['mgmt_net'])
+                net = IPv4Network(
+                    mgmt_counters['mgmt_address_ipv4']['mgmt_net'])
                 last_ip_index = mgmt_counters['mgmt_address_ipv4']['last_allocated_ip_index']
                 last_ip_index += 1
                 mgmtip = str(net[last_ip_index]) + '/' + str(net.prefixlen)
@@ -2073,7 +2075,8 @@ def get_new_mgmt_ipv6(deviceid):
                     mgmtip = None
             else:
                 # No reusable IPv6, allocate a new mgmt IPv6 address
-                net = IPv6Network(mgmt_counters['mgmt_address_ipv6']['mgmt_net'])
+                net = IPv6Network(
+                    mgmt_counters['mgmt_address_ipv6']['mgmt_net'])
                 last_ip_index = mgmt_counters['mgmt_address_ipv6']['last_allocated_ip_index']
                 last_ip_index += 1
                 mgmtip = str(net[last_ip_index]) + '/' + str(net.prefixlen)
@@ -2115,13 +2118,15 @@ def release_ipv4_address(deviceid):
                 logging.debug('The mgmt_counters does not exist')
             else:
                 reusable_addrs = mgmt_counters['mgmt_address_ipv4']['reusable_addrs']
-                prefixlen = mgmt_counters['mgmt_address_ipv4']['mgmt_net'].split('/')[1]
+                prefixlen = mgmt_counters['mgmt_address_ipv4']['mgmt_net'].split(
+                    '/')[1]
                 # Add the mgmt IPv4 to the reusable addresses list
                 reusable_addrs.append(mgmtip + '/' + str(prefixlen))
                 update = {
                     '$set': {'mgmt_address_ipv4.reusable_addrs': reusable_addrs}}
                 if config.update_one(query, update).modified_count != 1:
-                    logging.error('Error while updating reusable mgmt IPs list')
+                    logging.error(
+                        'Error while updating reusable mgmt IPs list')
                     success = False
                 else:
                     logging.debug('Mgmt IP added to reusable_addrs list')
@@ -2162,13 +2167,15 @@ def release_ipv6_address(deviceid):
                 logging.debug('The mgmt_counters does not exist')
             else:
                 reusable_addrs = mgmt_counters['mgmt_address_ipv6']['reusable_addrs']
-                prefixlen = mgmt_counters['mgmt_address_ipv6']['mgmt_net'].split('/')[1]
+                prefixlen = mgmt_counters['mgmt_address_ipv6']['mgmt_net'].split(
+                    '/')[1]
                 # Add the mgmt IPv6 to the reusable addresses list
                 reusable_addrs.append(mgmtip + '/' + str(prefixlen))
                 update = {
                     '$set': {'mgmt_address_ipv6.reusable_addrs': reusable_addrs}}
                 if config.update_one(query, update).modified_count != 1:
-                    logging.error('Error while updating reusable mgmt IPs list')
+                    logging.error(
+                        'Error while updating reusable mgmt IPs list')
                     success = False
                 else:
                     logging.debug('Mgmt IP added to reusable_addrs list')
@@ -2217,10 +2224,12 @@ def get_new_mgmt_ipv4_net(deviceid):
                     mgmtnet = None
             else:
                 # No reusable IPv4, allocate a new mgmt IPv4 net
-                net = IPv4Network(mgmt_counters['mgmt_subnet_ipv4']['mgmt_net'])
+                net = IPv4Network(
+                    mgmt_counters['mgmt_subnet_ipv4']['mgmt_net'])
                 last_subnet_index = mgmt_counters['mgmt_subnet_ipv4']['last_allocated_subnet_index']
                 last_subnet_index += 1
-                mgmtnet = str(next(itertools.islice(net.subnets(new_prefix=30), last_subnet_index, None)))
+                mgmtnet = str(next(itertools.islice(
+                    net.subnets(new_prefix=30), last_subnet_index, None)))
                 update = {
                     '$set': {'mgmt_subnet_ipv4.last_allocated_subnet_index': last_subnet_index}}
                 if config.update_one(query, update).modified_count != 1:
@@ -2267,10 +2276,12 @@ def get_new_mgmt_ipv6_net(deviceid):
                     mgmtnet = None
             else:
                 # No reusable IPv6, allocate a new mgmt IPv6 net
-                net = IPv4Network(mgmt_counters['mgmt_subnet_ipv6']['mgmt_net'])
+                net = IPv4Network(
+                    mgmt_counters['mgmt_subnet_ipv6']['mgmt_net'])
                 last_subnet_index = mgmt_counters['mgmt_subnet_ipv6']['last_allocated_subnet_index']
                 last_subnet_index += 1
-                mgmtnet = str(next(itertools.islice(net.subnets(new_prefix=30), last_subnet_index, None)))
+                mgmtnet = str(next(itertools.islice(
+                    net.subnets(new_prefix=30), last_subnet_index, None)))
                 update = {
                     '$set': {'mgmt_subnet_ipv6.last_allocated_subnet_index': last_subnet_index}}
                 if config.update_one(query, update).modified_count != 1:
@@ -2313,7 +2324,8 @@ def release_ipv4_net(deviceid):
                 update = {
                     '$set': {'mgmt_subnet_ipv4.reusable_nets': reusable_nets}}
                 if config.update_one(query, update).modified_count != 1:
-                    logging.error('Error while updating reusable mgmt IPs list')
+                    logging.error(
+                        'Error while updating reusable mgmt IPs list')
                     success = False
                 else:
                     logging.debug('Mgmt IP added to reusable_nets list')
@@ -2358,7 +2370,8 @@ def release_ipv6_net(deviceid):
                 update = {
                     '$set': {'mgmt_subnet_ipv6.reusable_nets': reusable_nets}}
                 if config.update_one(query, update).modified_count != 1:
-                    logging.error('Error while updating reusable mgmt IPs list')
+                    logging.error(
+                        'Error while updating reusable mgmt IPs list')
                     success = False
                 else:
                     logging.debug('Mgmt IP added to reusable_nets list')
@@ -2677,7 +2690,8 @@ def init_db():
     success = None
     try:
         # Update document
-        success = config.update_one(query, mgmt_counters, upsert=True).matched_count == 1
+        success = config.update_one(
+            query, mgmt_counters, upsert=True).matched_count == 1
         if success:
             logging.debug('Database initialized successfull')
         else:

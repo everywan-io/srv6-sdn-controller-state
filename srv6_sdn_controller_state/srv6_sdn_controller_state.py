@@ -75,10 +75,9 @@ def register_device(deviceid, features, interfaces, mgmtip,
         'mgmt_mac': None,
         'tenantid': tenantid,
         'tunnel_mode': None,
-        'tunnel_info': None,
         'nat_type': None,
-        'device_external_ip': None,
-        'device_external_port': None,
+        'external_ip': None,
+        'external_port': None,
         'vxlan_port': None,
         'connected': True,
         'configured': False,
@@ -187,8 +186,8 @@ def unregister_all_devices():
     return success
 
 
-# Update tunnel mode
-def update_tunnel_mode(deviceid, mgmtip, interfaces, tunnel_mode, nat_type,
+# Update management information
+def update_mgmt_info(deviceid, mgmtip, interfaces, tunnel_mode, nat_type,
                        device_external_ip, device_external_port,
                        device_vtep_mac, vxlan_port):
     # Build the query
@@ -1262,7 +1261,7 @@ def remove_overlays_by_tenantid(tenantid):
 # Get overlay
 def get_overlay(overlayid):
     # Build the query
-    query = {'_id': overlayid}
+    query = {'_id': ObjectId(overlayid)}
     overlay = None
     try:
         # Get a reference to the MongoDB client
@@ -1778,7 +1777,7 @@ def tenant_exists(tenantid):
 
 
 # Allocate and return a new table ID for a overlay
-def get_new_tableid(tenantid):
+def get_new_tableid(overlayid, tenantid):
     # Get a reference to the MongoDB client
     client = get_mongodb_session()
     # Get the database
@@ -1800,30 +1799,42 @@ def get_new_tableid(tenantid):
             if len(reusable_tableids) > 0:
                 # Get a table ID
                 tableid = reusable_tableids.pop()
-                # Remove the table ID from the reusable_tableids list
-                update = {
-                    '$set': {'counters.tableid.reusable_tableids': reusable_tableids}}
-                if tenants.update_one(query, update).modified_count != 1:
-                    logging.error(
-                        'Error while updating reusable table IDs list')
+                # Assign it to the overlay
+                if assign_tableid_to_overlay(overlayid, tenantid, tableid):
+                    # Remove the table ID from the reusable_tableids list
+                    update = {
+                        '$set': {'counters.tableid.reusable_tableids': reusable_tableids}}
+                    if tenants.update_one(query, update).modified_count != 1:
+                        logging.error(
+                            'Error while updating reusable table IDs list')
+                        tableid = None
+                else:
                     tableid = None
             else:
-                while True:
-                    # No reusable ID, allocate a new table ID
-                    tenant = tenants.find_one_and_update(
-                        query, {
-                            '$inc': {'counters.tableid.last_allocated_tableid': 1}},
-                        return_document=ReturnDocument.AFTER)
-                    if tenant is not None:
-                        tableid = tenant['counters']['tableid']['last_allocated_tableid']
+                # No reusable ID, allocate a new table ID
+                tenant = tenants.find_one(query)
+                if tenantid is not None:
+                    tableid = tenant['counters']['tableid']['last_allocated_tableid']
+                    while True:
+                        tableid += 1
                         if tableid not in RESERVED_TABLEIDS:
                             logging.debug('Found table ID: %s' % tableid)
                             break
                         logging.debug(
                             'Table ID %s is reserved. Getting new table ID' % tableid)
+                    # Assign it to the overlay
+                    if assign_tableid_to_overlay(overlayid, tenantid, tableid):
+                        # Remove the table ID from the reusable_tableids list
+                        update = {
+                            '$set': {'counters.tableid.last_allocated_tableid': tableid}}
+                        if tenants.update_one(query, update).modified_count != 1:
+                            logging.error(
+                                'Error while updating reusable table IDs list')
+                            tableid = None
                     else:
-                        logging.error('Error in get_new_tableid')
-                        break
+                        tableid = None
+                else:
+                    logging.error('Error in get_new_tableid')
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the table ID
@@ -1831,7 +1842,7 @@ def get_new_tableid(tenantid):
 
 
 # Release a table ID and mark it as reusable
-def release_tableid(tableid, tenantid):
+def release_tableid(overlayid, tenantid):
     # Build the query
     query = {'tenantid': tenantid}
     # Get a reference to the MongoDB client
@@ -1841,26 +1852,41 @@ def release_tableid(tableid, tenantid):
     # Get the tenants collection
     tenants = db.tenants
     # Release the table ID
-    logging.debug('Release table ID %s for tenant %s'
-                  % (tableid, tenantid))
+    logging.debug('Release table ID for overlay %s, tenant %s'
+                  % (overlayid, tenantid))
     success = None
     try:
-        # Get the overlay
-        tenant = tenants.find_one(query)
-        if tenant is None:
-            logging.debug('The tenant does not exist')
+        # Get the table ID assigned to the overlay
+        tableid = get_tableid(overlayid, tenantid)
+        if tableid is None:
+            logging.error('Error while getting table ID assigned to the '
+                          'overlay %s' % overlayid)
+            success = False
         else:
-            reusable_tableids = tenant['counters']['tableid']['reusable_tableids']
-            # Add the table ID to the reusable table IDs list
-            reusable_tableids.append(tableid)
-            update = {
-                '$set': {'counters.tableid.reusable_tableids': reusable_tableids}}
-            if tenants.update_one(query, update).modified_count != 1:
-                logging.error('Error while updating reusable table IDs list')
+            # Remove the table ID from the overlay
+            success = remove_tableid_from_overlay(
+                overlayid, tenantid, tableid)
+            if success is not True:
+                logging.error('Error while removing table ID %s from the '
+                            'overlay %s' % (tableid, overlayid))
                 success = False
             else:
-                logging.debug('Table ID added to reusable_tableids list')
-                success = True
+                # Get the overlay
+                tenant = tenants.find_one(query)
+                if tenant is None:
+                    logging.debug('The tenant does not exist')
+                else:
+                    reusable_tableids = tenant['counters']['tableid']['reusable_tableids']
+                    # Add the table ID to the reusable table IDs list
+                    reusable_tableids.append(tableid)
+                    update = {
+                        '$set': {'counters.tableid.reusable_tableids': reusable_tableids}}
+                    if tenants.update_one(query, update).modified_count != 1:
+                        logging.error('Error while updating reusable table IDs list')
+                        success = False
+                    else:
+                        logging.debug('Table ID added to reusable_tableids list')
+                        success = True
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return True if success,
@@ -1900,7 +1926,7 @@ def get_tableid(overlayid, tenantid):
 # Assign a table ID to an overlay
 def assign_tableid_to_overlay(overlayid, tenantid, tableid):
     # Build the query
-    query = {'tenantid': tenantid, '_id': overlayid}
+    query = {'tenantid': tenantid, '_id': ObjectId(overlayid)}
     # Get a reference to the MongoDB client
     client = get_mongodb_session()
     # Get the database
@@ -1908,7 +1934,7 @@ def assign_tableid_to_overlay(overlayid, tenantid, tableid):
     # Get the overlays collection
     overlays = db.overlays
     # Assign the table ID to the overlay
-    success = True
+    success = None
     try:
         logging.debug('Trying to assign the table ID %s to the overlay %s'
                       % (tableid, overlayid))
@@ -1927,9 +1953,11 @@ def assign_tableid_to_overlay(overlayid, tenantid, tableid):
 
 
 # Remove a table ID from an overlay
-def remove_tableid_from_overlay(overlayid, tenantid, tableid):
+def remove_tableid_from_overlay(overlayid, tenantid, tableid): 
+    # TODO check if tableid is assigned to the overlay
+    #
     # Build the query
-    query = {'tenantid': tenantid, '_id': overlayid}
+    query = {'tenantid': tenantid, '_id': ObjectId(overlayid)}
     # Get a reference to the MongoDB client
     client = get_mongodb_session()
     # Get the database
@@ -1937,7 +1965,7 @@ def remove_tableid_from_overlay(overlayid, tenantid, tableid):
     # Get the overlays collection
     overlays = db.overlays
     # Set the table ID to null for the overlay
-    success = True
+    success = None
     try:
         logging.debug('Trying to remove the table ID from the overlay %s'
                       % overlayid)
@@ -2348,7 +2376,9 @@ def release_ipv6_net(deviceid):
 # Return the private IP of the device
 def get_device_mgmtip(tenantid, deviceid):
     # Build the query
-    query = {'tenantid': tenantid, 'deviceid': deviceid}
+    query = {'deviceid': deviceid}
+    if tenantid is not None:
+        query['tenantid'] = tenantid
     # Get a reference to the MongoDB client
     client = get_mongodb_session()
     # Get the database

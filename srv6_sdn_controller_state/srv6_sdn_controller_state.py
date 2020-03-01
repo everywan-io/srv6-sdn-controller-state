@@ -2690,12 +2690,14 @@ def init_db():
     success = None
     try:
         # Update document
-        success = config.update_one(
-            query, mgmt_counters, upsert=True).matched_count == 1
-        if success:
+        res = config.update_one(
+            query, mgmt_counters, upsert=True)
+        if res.matched_count == 1 or res.upserted_id is not None:
+            success = True
             logging.debug('Database initialized successfull')
         else:
             logging.error('Error in database initialization')
+            success = False
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Success

@@ -1589,7 +1589,9 @@ def get_tenant_config(tenantid):
         logging.debug('Getting the configuration of the tenant %s' % tenantid)
         tenant = tenants.find_one(query)
         if tenant is not None:
-            config = tenant['config']
+            config = tenant.get('config')
+            if config is None:
+                logging.error('Tenant %s is not configured', tenantid)
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the tenant configuration if the tenant exists,
@@ -1614,12 +1616,16 @@ def get_tenant_configs(tenantids):
         tenants = tenants.find(query, {'conf': 1})
         # Return the configs
         configs = dict()
-        for tenantid in tenants:
+        for tenant in tenants:
+            tenantid = tenant['tenantid']
+            if not tenant.get('configured', False):
+                logging.error('Tenant %s is not configured' % tenantid)
+                return None
             configs[tenantid] = {
-                'name': tenants[tenantid]['name'],
-                'tenantid': tenants[tenantid]['tenantid'],
-                'config': tenants[tenantid]['config'],
-                'info': tenants[tenantid]['info']
+                'name': tenant['name'],
+                'tenantid': tenant['tenantid'],
+                'config': tenant['config'],
+                'info': tenant['info']
             }
         logging.debug('Configs: %s' % configs)
     except pymongo.errors.ServerSelectionTimeoutError:

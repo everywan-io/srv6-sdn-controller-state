@@ -2099,7 +2099,7 @@ def get_new_mgmt_ipv6(deviceid):
 
 
 # Release the IPv4 address associated to the device
-def release_ipv4_address(deviceid):
+def release_ipv4_address(deviceid, tenantid):
     # Build the query
     query = {'config': 'mgmt_counters'}
     # Get a reference to the MongoDB client
@@ -2148,7 +2148,7 @@ def release_ipv4_address(deviceid):
 
 
 # Release the IPv6 address associated to the device
-def release_ipv6_address(deviceid):
+def release_ipv6_address(deviceid, tenantid):
     # Build the query
     query = {'config': 'mgmt_counters'}
     # Get a reference to the MongoDB client

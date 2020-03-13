@@ -81,7 +81,7 @@ def register_device(deviceid, features, interfaces, mgmtip,
         'external_ip': None,
         'external_port': None,
         'vxlan_port': None,
-        'connected': True,
+        'connected': False,
         'configured': False,
         'enabled': False,
         'stats': {

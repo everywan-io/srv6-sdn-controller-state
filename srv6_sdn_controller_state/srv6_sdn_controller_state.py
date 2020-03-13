@@ -50,6 +50,8 @@ def get_mongodb_session(host=DEFAULT_MONGODB_HOST,
     # Return the MogoDB client
     logging.debug('Trying to establish a connection '
                   'to the db (%s:%s)' % (host, port))
+    # Adjust IP address representation
+    host = '[%s]' % host
     if client is None:
         client = pymongo.MongoClient(host=host,
                                      port=port,
@@ -79,7 +81,7 @@ def register_device(deviceid, features, interfaces, mgmtip,
         'external_ip': None,
         'external_port': None,
         'vxlan_port': None,
-        'connected': True,
+        'connected': False,
         'configured': False,
         'enabled': False,
         'stats': {
@@ -113,11 +115,12 @@ def register_device(deviceid, features, interfaces, mgmtip,
 
 
 # Unregister a device
-def unregister_device(deviceid):
+def unregister_device(deviceid, tenantid):
     # Build the document to insert
-    device = {'deviceid': deviceid}
+    device = {'deviceid': deviceid, 'tenantid': tenantid}
     # Unregister the device
-    logging.debug('Unregistering device: %s' % deviceid)
+    logging.debug('Unregistering device: %s (tenant %s)'
+                  % (deviceid, tenantid))
     success = None
     try:
         # Get a reference to the MongoDB client
@@ -187,13 +190,14 @@ def unregister_all_devices():
 
 
 # Update management information
-def update_mgmt_info(deviceid, mgmtip, interfaces, tunnel_mode, nat_type,
+def update_mgmt_info(deviceid, tenantid, mgmtip, interfaces, tunnel_mode, nat_type,
                      device_external_ip, device_external_port,
                      device_vtep_mac, vxlan_port):
     # Build the query
-    query = [{'deviceid': deviceid}]
+    query = [{'deviceid': deviceid, 'tenantid': tenantid}]
     for interface in interfaces:
-        query.append({'deviceid': deviceid, 'interfaces.name': interface})
+        query.append({'deviceid': deviceid,
+                      'tenantid': tenantid, 'interfaces.name': interface})
     # Build the update
     update = [{
         '$set': {'mgmtip': mgmtip,
@@ -279,9 +283,9 @@ def get_devices(deviceids=None, tenantid=None, return_dict=False):
 
 
 # Get a device
-def get_device(deviceid):
+def get_device(deviceid, tenantid):
     # Build the query
-    query = {'deviceid': deviceid}
+    query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Find the device
     logging.debug('Retrieving device %s' % deviceid)
     device = None
@@ -303,9 +307,9 @@ def get_device(deviceid):
 
 # Return True if a device exists,
 # False otherwise
-def device_exists(deviceid):
+def device_exists(deviceid, tenantid):
     # Build the query
-    device = {'deviceid': deviceid}
+    device = {'deviceid': deviceid, 'tenantid': tenantid}
     device_exists = None
     try:
         # Get a reference to the MongoDB client
@@ -315,7 +319,8 @@ def device_exists(deviceid):
         # Get the devices collection
         devices = db.devices
         # Count the devices with the given device ID
-        logging.debug('Searching the device %s' % deviceid)
+        logging.debug('Searching the device %s (tenant %s)'
+                      % (deviceid, tenantid))
         if devices.count_documents(device, limit=1):
             logging.debug('The device exists')
             device_exists = True
@@ -361,10 +366,11 @@ def devices_exists(deviceids):
 
 # Return True if a device exists and is in enabled state,
 # False otherwise
-def is_device_enabled(deviceid):
+def is_device_enabled(deviceid, tenantid):
     # Get the device
-    logging.debug('Searching the device %s' % deviceid)
-    device = get_device(deviceid)
+    logging.debug('Searching the device %s (tenant %s)'
+                  % (deviceid, tenantid))
+    device = get_device(deviceid, tenantid)
     res = None
     if device is not None:
         # Get the status of the device
@@ -381,10 +387,11 @@ def is_device_enabled(deviceid):
 
 # Return True if a device exists and is in configured state,
 # False otherwise
-def is_device_configured(deviceid):
+def is_device_configured(deviceid, tenantid):
     # Get the device
-    logging.debug('Searching the device %s' % deviceid)
-    device = get_device(deviceid)
+    logging.debug('Searching the device %s (tenant %s)'
+                  % (deviceid, tenantid))
+    device = get_device(deviceid, tenantid)
     res = None
     if device is not None:
         # Get the status of the device
@@ -401,10 +408,11 @@ def is_device_configured(deviceid):
 
 # Return True if a device exists and is in connected state,
 # False otherwise
-def is_device_connected(deviceid):
+def is_device_connected(deviceid, tenantid):
     # Get the device
-    logging.debug('Searching the device %s' % deviceid)
-    device = get_device(deviceid)
+    logging.debug('Searching the device %s (tenant %s)'
+                  % (deviceid, tenantid))
+    device = get_device(deviceid, tenantid)
     res = None
     if device is not None:
         # Get the status of the device
@@ -421,12 +429,13 @@ def is_device_connected(deviceid):
 
 # Return True if an interface exists on a given device,
 # False otherwise
-def interface_exists_on_device(deviceid, interface_name):
+def interface_exists_on_device(deviceid, tenantid, interface_name):
     # Build the query
-    query = {'deviceid': deviceid, 'interfaces.name': interface_name}
+    query = {'deviceid': deviceid, 'tenantid': tenantid,
+             'interfaces.name': interface_name}
     # Get the device
-    logging.debug('Getting the interface %s on the device %s' %
-                  (interface_name, deviceid))
+    logging.debug('Getting the interface %s on the device %s (tenant %s)' %
+                  (interface_name, deviceid, tenantid))
     exists = None
     try:
         # Get a reference to the MongoDB client
@@ -452,11 +461,11 @@ def interface_exists_on_device(deviceid, interface_name):
 
 
 # Return an interface of a device
-def get_interface(deviceid, interface_name):
-    logging.debug('Getting the interface %s of device %s' %
-                  (interface_name, deviceid))
+def get_interface(deviceid, tenantid, interface_name):
+    logging.debug('Getting the interface %s of device %s (tenant %s)' %
+                  (interface_name, deviceid, tenantid))
     # Build the query
-    query = {'deviceid': deviceid}
+    query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Build the filter
     filter = {'interfaces': {'$elemMatch': {'name': interface_name}}}
     interface = None
@@ -482,10 +491,11 @@ def get_interface(deviceid, interface_name):
 
 
 # Return all the interfaces of a device
-def get_interfaces(deviceid):
+def get_interfaces(deviceid, tenantid):
     # Get the device
-    logging.debug('Getting the interfaces of device %s' % deviceid)
-    device = get_device(deviceid)
+    logging.debug('Getting the interfaces of device %s '
+                  '(tenant %s)' % (deviceid, tenantid))
+    device = get_device(deviceid, tenantid)
     interfaces = None
     if device is not None:
         # Return the interfaces
@@ -496,10 +506,10 @@ def get_interfaces(deviceid):
 
 
 # Get device's IPv4 addresses
-def get_ipv4_addresses(deviceid, interface_name):
+def get_ipv4_addresses(deviceid, tenantid, interface_name):
     # Find the IPv4 addresses by device ID and interface
     logging.debug('Retrieving IPv4 addresses for device %s' % deviceid)
-    interface = get_interface(deviceid, interface_name)
+    interface = get_interface(deviceid, tenantid, interface_name)
     addrs = None
     if interface is not None:
         # Extract the addresses
@@ -513,10 +523,11 @@ def get_ipv4_addresses(deviceid, interface_name):
 
 
 # Get device's IPv6 addresses
-def get_ipv6_addresses(deviceid, interface_name):
+def get_ipv6_addresses(deviceid, tenantid, interface_name):
     # Find the IPv6 addresses by device ID and interface
-    logging.debug('Retrieving IPv6 addresses for device %s' % deviceid)
-    interface = get_interface(deviceid, interface_name)
+    logging.debug('Retrieving IPv6 addresses for device %s (tenant %s)'
+                  % (deviceid, tenantid))
+    interface = get_interface(deviceid, tenantid, interface_name)
     addrs = None
     if interface is not None:
         # Extract the addresses
@@ -530,11 +541,12 @@ def get_ipv6_addresses(deviceid, interface_name):
 
 
 # Get device's IP addresses
-def get_ip_addresses(deviceid, interface_name):
+def get_ip_addresses(deviceid, tenantid, interface_name):
     # Find the IP addresses by device ID and interface name
     logging.debug('Retrieving IP addresses for device %s '
-                  'and interface %s' % (deviceid, interface_name))
-    interface = get_interface(deviceid, interface_name)
+                  'and interface %s (tenant %s)'
+                  % (deviceid, interface_name, tenantid))
+    interface = get_interface(deviceid, tenantid, interface_name)
     addrs = None
     if interface is not None:
         addrs = interface['ipv4_addrs'] + \
@@ -549,11 +561,12 @@ def get_ip_addresses(deviceid, interface_name):
 
 
 # Get device's external IPv4 addresses
-def get_ext_ipv4_addresses(deviceid, interface_name):
+def get_ext_ipv4_addresses(deviceid, tenantid, interface_name):
     # Find the external IPv4 addresses by device ID and interface
     logging.debug(
-        'Retrieving external IPv4 addresses for device %s' % deviceid)
-    interface = get_interface(deviceid, interface_name)
+        'Retrieving external IPv4 addresses for device %s (tenant %s)'
+        % (deviceid, tenantid))
+    interface = get_interface(deviceid, tenantid, interface_name)
     addrs = None
     if interface is not None:
         # Extract the addresses
@@ -567,11 +580,12 @@ def get_ext_ipv4_addresses(deviceid, interface_name):
 
 
 # Get device's external IPv6 addresses
-def get_ext_ipv6_addresses(deviceid, interface_name):
+def get_ext_ipv6_addresses(deviceid, tenantid, interface_name):
     # Find the external IPv6 addresses by device ID and interface
     logging.debug(
-        'Retrieving external IPv6 addresses for device %s' % deviceid)
-    interface = get_interface(deviceid, interface_name)
+        'Retrieving external IPv6 addresses for device %s (tenant %s)'
+        % (deviceid, tenantid))
+    interface = get_interface(deviceid, tenantid, interface_name)
     addrs = None
     if interface is not None:
         # Extract the addresses
@@ -585,11 +599,12 @@ def get_ext_ipv6_addresses(deviceid, interface_name):
 
 
 # Get device's external IP addresses
-def get_ext_ip_addresses(deviceid, interface_name):
+def get_ext_ip_addresses(deviceid, tenantid, interface_name):
     # Find the external IP addresses by device ID and interface name
     logging.debug('Retrieving external IP addresses for device %s '
-                  'and interface %s' % (deviceid, interface_name))
-    interface = get_interface(deviceid, interface_name)
+                  'and interface %s (tenant %s)'
+                  % (deviceid, interface_name))
+    interface = get_interface(deviceid, tenantid, interface_name)
     addrs = None
     if interface is not None:
         addrs = interface['ext_ipv4_addrs'] + \
@@ -604,10 +619,11 @@ def get_ext_ip_addresses(deviceid, interface_name):
 
 
 # Get device's IPv4 subnets
-def get_ipv4_subnets(deviceid, interface_name):
+def get_ipv4_subnets(deviceid, tenantid, interface_name):
     # Find the IPv4 subnets by device ID and interface
-    logging.debug('Retrieving IPv4 subnets for device %s' % deviceid)
-    interface = get_interface(deviceid, interface_name)
+    logging.debug('Retrieving IPv4 subnets for device %s (tenant %s)'
+                  % (deviceid, tenantid))
+    interface = get_interface(deviceid, tenantid, interface_name)
     subnets = None
     if interface is not None:
         # Extract the subnets
@@ -621,10 +637,11 @@ def get_ipv4_subnets(deviceid, interface_name):
 
 
 # Get device's IPv6 subnets
-def get_ipv6_subnets(deviceid, interface_name):
+def get_ipv6_subnets(deviceid, tenantid, interface_name):
     # Find the IPv6 subnets by device ID and interface
-    logging.debug('Retrieving IPv6 subnets for device %s' % deviceid)
-    interface = get_interface(deviceid, interface_name)
+    logging.debug('Retrieving IPv6 subnets for device %s'
+                  % (deviceid, tenantid))
+    interface = get_interface(deviceid, tenantid, interface_name)
     subnets = None
     if interface is not None:
         # Extract the subnets
@@ -638,11 +655,12 @@ def get_ipv6_subnets(deviceid, interface_name):
 
 
 # Get device's IP subnets
-def get_ip_subnets(deviceid, interface_name):
+def get_ip_subnets(deviceid, tenantid, interface_name):
     # Find the IP subnets by device ID and interface name
     logging.debug('Retrieving IP subnets for device %s '
-                  'and interface %s' % (deviceid, interface_name))
-    interface = get_interface(deviceid, interface_name)
+                  'and interface %s (tenant %s)'
+                  % (deviceid, interface_name, tenantid))
+    interface = get_interface(deviceid, tenantid, interface_name)
     subnets = None
     if interface is not None:
         subnets = interface['ipv4_subnets'] + \
@@ -657,8 +675,8 @@ def get_ip_subnets(deviceid, interface_name):
 
 
 # Get router's IPv4 loopback IP
-def get_loopbackip_ipv4(deviceid):
-    addrs = get_ipv4_addresses(deviceid, 'lo')
+def get_loopbackip_ipv4(deviceid, tenantid):
+    addrs = get_ipv4_addresses(deviceid, tenantid, 'lo')
     if addrs is not None:
         return addrs[0]
     else:
@@ -666,8 +684,8 @@ def get_loopbackip_ipv4(deviceid):
 
 
 # Get router's IPv4 loopback net
-def get_loopbacknet_ipv4(deviceid):
-    loopbackip = get_loopbackip_ipv4(deviceid)
+def get_loopbacknet_ipv4(deviceid, tenantid):
+    loopbackip = get_loopbackip_ipv4(deviceid, tenantid)
     if loopbackip is not None:
         return IPv4Interface(loopbackip).network.__str__()
     else:
@@ -675,8 +693,8 @@ def get_loopbacknet_ipv4(deviceid):
 
 
 # Get router's IPv6 loopback IP
-def get_loopbackip_ipv6(deviceid):
-    addrs = get_ipv6_addresses(deviceid, 'lo')
+def get_loopbackip_ipv6(deviceid, tenantid):
+    addrs = get_ipv6_addresses(deviceid, tenantid, 'lo')
     if addrs is not None:
         return addrs[0]
     else:
@@ -684,8 +702,8 @@ def get_loopbackip_ipv6(deviceid):
 
 
 # Get router's IPv6 loopback net
-def get_loopbacknet_ipv6(deviceid):
-    loopbackip = get_loopbackip_ipv6(deviceid)
+def get_loopbacknet_ipv6(deviceid, tenantid):
+    loopbackip = get_loopbackip_ipv6(deviceid, tenantid)
     if loopbackip is not None:
         return IPv6Interface(loopbackip).network.__str__()
     else:
@@ -693,10 +711,10 @@ def get_loopbacknet_ipv6(deviceid):
 
 
 # Get router's management IP address
-def get_router_mgmtip(deviceid):
+def get_router_mgmtip(deviceid, tenantid):
     logging.debug('Retrieving management IP for device %s' % deviceid)
     # Get the device
-    device = get_device(deviceid)
+    device = get_device(deviceid, tenantid)
     mgmtip = None
     if device is not None:
         # Get the management IP address
@@ -709,9 +727,9 @@ def get_router_mgmtip(deviceid):
 
 
 # Get WAN interfaces of a device
-def get_wan_interfaces(deviceid):
+def get_wan_interfaces(deviceid, tenantid):
     # Retrieve all the interfaces
-    interfaces = get_interfaces(deviceid)
+    interfaces = get_interfaces(deviceid, tenantid)
     wan_interfaces = None
     if interfaces is not None:
         # Filter WAN interfaces
@@ -726,9 +744,9 @@ def get_wan_interfaces(deviceid):
 
 
 # Get LAN interfaces of a device
-def get_lan_interfaces(deviceid):
+def get_lan_interfaces(deviceid, tenantid):
     # Retrieve all the interfaces
-    interfaces = get_interfaces(deviceid)
+    interfaces = get_interfaces(deviceid, tenantid)
     lan_interfaces = None
     if interfaces is not None:
         # Filter LAN interfaces
@@ -743,9 +761,9 @@ def get_lan_interfaces(deviceid):
 
 
 # Get non-loopback interfaces of a device
-def get_non_loopback_interfaces(deviceid):
+def get_non_loopback_interfaces(deviceid, tenantid):
     # Retrieve all the interfaces
-    interfaces = get_interfaces(deviceid)
+    interfaces = get_interfaces(deviceid, tenantid)
     non_lo_interfaces = None
     if interfaces is not None:
         # Filter non-loopback interfaces
@@ -767,12 +785,14 @@ def configure_devices(devices):
     for device in devices:
         # Get device ID
         deviceid = device['deviceid']
+        # Get tenant ID
+        tenantid = device['tenantid']
         # Get device name
         name = device['name']
         # Get device description
         description = device['description']
         # Add query
-        queries.append({'deviceid': deviceid})
+        queries.append({'deviceid': deviceid, 'tenantid': tenantid})
         # Add update
         updates.append({'$set': {
             'name': name,
@@ -832,9 +852,9 @@ def configure_devices(devices):
 
 
 # Enable or disable a device
-def set_device_enabled_flag(deviceid, enabled):
+def set_device_enabled_flag(deviceid, tenantid, enabled):
     # Build the query
-    query = {'deviceid': deviceid}
+    query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Build the update
     update = {'$set': {'enabled': enabled}}
     success = None
@@ -860,9 +880,9 @@ def set_device_enabled_flag(deviceid, enabled):
 
 
 # Mark the device as configured / unconfigured
-def set_device_configured_flag(deviceid, configured):
+def set_device_configured_flag(deviceid, tenantid, configured):
     # Build the query
-    query = {'deviceid': deviceid}
+    query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Build the update
     update = {'$set': {'configured': configured}}
     success = None
@@ -888,9 +908,9 @@ def set_device_configured_flag(deviceid, configured):
 
 
 # Set / unset 'connected' flag for a device
-def set_device_connected_flag(deviceid, connected):
+def set_device_connected_flag(deviceid, tenantid, connected):
     # Build the query
-    query = {'deviceid': deviceid}
+    query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Build the update
     update = {'$set': {'connected': connected}}
     success = None
@@ -917,7 +937,7 @@ def set_device_connected_flag(deviceid, connected):
 
 # Get the counter of a tunnel mode on a device and
 # increase the counter
-def get_and_inc_tunnel_mode_counter(tunnel_name, deviceid):
+def get_and_inc_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
     counter = None
     try:
         # Get a reference to the MongoDB client
@@ -927,9 +947,11 @@ def get_and_inc_tunnel_mode_counter(tunnel_name, deviceid):
         # Get the devices collection
         devices = db.devices
         # Find the device
-        logging.debug('Getting the device %s' % deviceid)
+        logging.debug('Getting the device %s (tenant %s)'
+                      % (deviceid, tenantid))
         # Build query
         query = {'deviceid': deviceid,
+                 'tenantid': tenantid,
                  'stats.counters.tunnels.tunnel_mode': {'$ne': tunnel_name}}
         # Build the update
         update = {'$push': {
@@ -959,9 +981,10 @@ def get_and_inc_tunnel_mode_counter(tunnel_name, deviceid):
 
 # Decrease the counter of a tunnel mode on a device and
 # return the counter after the decrement
-def dec_and_get_tunnel_mode_counter(tunnel_name, deviceid):
+def dec_and_get_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
     # Build the query
     query = {'deviceid': deviceid,
+             'tenantid': tenantid,
              'stats.counters.tunnels.tunnel_mode': tunnel_name}
     counter = None
     try:
@@ -972,11 +995,14 @@ def dec_and_get_tunnel_mode_counter(tunnel_name, deviceid):
         # Get the devices collection
         devices = db.devices
         # Find the device
-        logging.debug('Getting the device %s' % deviceid)
+        logging.debug('Getting the device %s (tenant %s)' % (deviceid, tenantid))
         # Decrease the counter for the tunnel mode
         device = devices.find_one_and_update(
             query, {'$inc': {'stats.counters.tunnels.$.counter': -1}},
             return_document=ReturnDocument.AFTER)
+        if device is None:
+            logging.error('Device not found or tunnel mode counter not found')
+            return None
         # Return the counter
         counter = -1
         for tunnel_mode in device['stats']['counters']['tunnels']:
@@ -984,6 +1010,7 @@ def dec_and_get_tunnel_mode_counter(tunnel_name, deviceid):
                 counter = tunnel_mode['counter']
         if counter == -1:
             logging.error('Cannot update counter')
+            return None
         logging.debug('Counter after the decrement: %s' % counter)
         # If counter is 0, remove the tunnel mode from the device stats
         if counter == 0:
@@ -998,9 +1025,9 @@ def dec_and_get_tunnel_mode_counter(tunnel_name, deviceid):
 
 
 # Return the number of tunnels configured on a device
-def get_num_tunnels(deviceid):
+def get_num_tunnels(deviceid, tenantid):
     # Build the query
-    query = {'deviceid': deviceid}
+    query = {'deviceid': deviceid, 'tenantid': tenantid}
     num = None
     try:
         # Get a reference to the MongoDB client
@@ -1030,10 +1057,104 @@ def get_num_tunnels(deviceid):
     return num
 
 
-# Update device VTEP MAC address
-def update_device_vtep_mac(deviceid, device_vtep_mac):
+# Get the counter of tunnels on a device and increase the counter
+def inc_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
+    counter = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the overlays collection
+        overlays = db.overlays
+        # Find the device
+        logging.debug('Getting the overlay %s (tenant %s)'
+                      % (overlayid, tenantid))
+        # Build query
+        query = {'_id': ObjectId(overlayid),
+                 'tenantid': tenantid,
+                 'stats.counters.tunnels.deviceid': {'$ne': deviceid},
+                 'stats.counters.tunnels.dest_slice': {'$ne': dest_slice}}
+        # Build the update
+        update = {'$push': {
+            'stats.counters.tunnels': {'deviceid': deviceid, 'dest_slice': dest_slice, 'counter': 0}}}
+        # If the counter does not exist, create it
+        overlays.update_one(query, update)
+        # Build the query
+        query = {'_id': ObjectId(overlayid),
+                 'tenantid': tenantid,
+                 'stats.counters.tunnels.deviceid': deviceid,
+                 'stats.counters.tunnels.dest_slice': dest_slice}
+        # Build the update
+        update = {'$inc': {'stats.counters.tunnels.$.counter': 1}}
+        # Increase the tunnels counter for the overlay
+        overlay = overlays.find_one_and_update(
+            query, update)
+        # Return the counter if exists, 0 otherwise
+        counter = 0
+        for tunnel in overlay['stats']['counters']['tunnels']:
+            if deviceid == tunnel['deviceid'] and \
+                    dest_slice == tunnel['dest_slice']:
+                counter = tunnel['counter']
+        logging.debug('Counter before the increment: %s' % counter)
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return the counter if success,
+    # None if an error occurred during the connection to the db
+    return counter
+
+
+# Decrease the counter of a tunnels on a overlay and
+# return the counter after the decrement
+def dec_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
     # Build the query
-    query = {'deviceid': deviceid}
+    query = {'_id': ObjectId(overlayid),
+             'tenantid': tenantid,
+             'stats.counters.tunnels.deviceid': deviceid,
+             'stats.counters.tunnels.dest_slice': dest_slice}
+    counter = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the overlays collection
+        overlays = db.overlays
+        # Find the overlay
+        logging.debug('Getting the overlay %s (tenant %s)' % (overlayid, tenantid))
+        # Decrease the counter for the tunnel mode
+        overlay = overlays.find_one_and_update(
+            query, {'$inc': {'stats.counters.tunnels.$.counter': -1}},
+            return_document=ReturnDocument.AFTER)
+        if overlay is None:
+            logging.error('Overlay not found or tunnels counter not found')
+            return None
+        # Return the counter
+        counter = -1
+        for tunnel in overlay['stats']['counters']['tunnels']:
+            if deviceid == tunnel['deviceid'] and \
+                    dest_slice == tunnel['dest_slice']:
+                counter = tunnel['counter']
+        if counter == -1:
+            logging.error('Cannot update counter')
+            return None
+        logging.debug('Counter after the decrement: %s' % counter)
+        # If counter is 0, remove the tunnel from the overlay stats
+        if counter == 0:
+            logging.debug('Counter set to 0, removing tunnel mode')
+            overlays.update_one(
+                query, {'$pull': {'stats.counters.tunnels': {'deviceid': deviceid, 'dest_slice': dest_slice}}})
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return the counter if success,
+    # None if an error occurred during the connection to the db
+    return counter
+
+
+# Update device VTEP MAC address
+def update_device_vtep_mac(deviceid, tenantid, device_vtep_mac):
+    # Build the query
+    query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Build the update
     update = {'$set': {'mgmt_mac': device_vtep_mac}}
     success = None
@@ -1045,7 +1166,8 @@ def update_device_vtep_mac(deviceid, device_vtep_mac):
         # Get the devices collection
         devices = db.devices
         # Find the device
-        logging.debug('Update device %s VTEP MAC address' % deviceid)
+        logging.debug('Update device %s (tenant %s) VTEP MAC address'
+                      % (deviceid, tenantid))
         logging.debug('New MAC address: %s' % device_vtep_mac)
         # Get the device
         success = devices.update_one(query, update).matched_count == 1
@@ -1060,9 +1182,9 @@ def update_device_vtep_mac(deviceid, device_vtep_mac):
 
 
 # Update device VTEP IP address
-def update_device_vtep_ip(deviceid, device_vtep_ip):
+def update_device_vtep_ip(deviceid, tenantid, device_vtep_ip):
     # Build the query
-    query = {'deviceid': deviceid}
+    query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Build the update
     update = {'$set': {'mgmtip': device_vtep_ip}}
     success = None
@@ -1074,7 +1196,8 @@ def update_device_vtep_ip(deviceid, device_vtep_ip):
         # Get the devices collection
         devices = db.devices
         # Find the device
-        logging.debug('Update device %s VTEP IP address' % deviceid)
+        logging.debug('Update device %s (tenant %s) VTEP IP address'
+                      % (deviceid, tenantid))
         logging.debug('New IP address: %s' % device_vtep_ip)
         # Get the device
         success = devices.update_one(query, update).matched_count == 1
@@ -1089,9 +1212,9 @@ def update_device_vtep_ip(deviceid, device_vtep_ip):
 
 
 # Get device VTEP MAC address
-def get_device_vtep_mac(deviceid):
+def get_device_vtep_mac(deviceid, tenantid):
     # Build the query
-    query = {'deviceid': deviceid}
+    query = {'deviceid': deviceid, 'tenantid': tenantid}
     res = None
     try:
         # Get a reference to the MongoDB client
@@ -1101,7 +1224,8 @@ def get_device_vtep_mac(deviceid):
         # Get the devices collection
         devices = db.devices
         # Find the device
-        logging.debug('Get device %s VTEP MAC address' % deviceid)
+        logging.debug('Get device %s (tenant %s) VTEP MAC address'
+                      % (deviceid, tenantid))
         # Get the device
         res = devices.find_one(query)['mgmt_mac']
         if res is None:
@@ -1114,16 +1238,16 @@ def get_device_vtep_mac(deviceid):
     return res
 
 
-def get_tunnel_mode(deviceid):
-    device = get_device(deviceid)
+def get_tunnel_mode(deviceid, tenantid):
+    device = get_device(deviceid, tenantid)
     if device is None:
         return None
     return device['tunnel_mode']
 
 
-def set_tunnel_mode(deviceid, tunnel_mode):
+def set_tunnel_mode(deviceid, tenantid, tunnel_mode):
     # Build the query
-    query = {'deviceid': deviceid}
+    query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Build the update
     update = {'$set': {'tunnel_mode': tunnel_mode}}
     success = None
@@ -1185,9 +1309,9 @@ def create_overlay(name, type, slices, tenantid, tunnel_mode):
 
 
 # Remove overlay by ID
-def remove_overlay(overlayid):
+def remove_overlay(overlayid, tenantid):
     # Build the filter
-    overlay = {'_id': ObjectId(overlayid)}
+    overlay = {'_id': ObjectId(overlayid), 'tenantid': tenantid}
     success = None
     try:
         # Get a reference to the MongoDB client
@@ -1258,9 +1382,9 @@ def remove_overlays_by_tenantid(tenantid):
 
 
 # Get overlay
-def get_overlay(overlayid):
+def get_overlay(overlayid, tenantid):
     # Build the query
-    query = {'_id': ObjectId(overlayid)}
+    query = {'_id': ObjectId(overlayid), 'tenantid': tenantid}
     overlay = None
     try:
         # Get a reference to the MongoDB client
@@ -1371,9 +1495,9 @@ def overlay_exists(name, tenantid):
 
 
 # Add a slice to an overlay
-def add_slice_to_overlay(overlayid, _slice):
+def add_slice_to_overlay(overlayid, tenantid, _slice):
     # Build the query
-    query = {'_id': ObjectId(overlayid)}
+    query = {'_id': ObjectId(overlayid), 'tenantid': tenantid}
     success = None
     try:
         # Get a reference to the MongoDB client
@@ -1401,9 +1525,9 @@ def add_slice_to_overlay(overlayid, _slice):
 
 
 # Add many slices to an overlay
-def add_many_slices_to_overlay(overlayid, slices):
+def add_many_slices_to_overlay(overlayid, tenantid, slices):
     # Build the query
-    query = {'_id': ObjectId(overlayid)}
+    query = {'_id': ObjectId(overlayid), 'tenantid': tenantid}
     success = None
     try:
         # Get a reference to the MongoDB client
@@ -1431,9 +1555,9 @@ def add_many_slices_to_overlay(overlayid, slices):
 
 
 # Remove a slice from an overlay
-def remove_slice_from_overlay(overlayid, _slice):
+def remove_slice_from_overlay(overlayid, tenantid, _slice):
     # Build the query
-    query = {'_id': ObjectId(overlayid)}
+    query = {'_id': ObjectId(overlayid), 'tenantid': tenantid}
     success = None
     try:
         # Get a reference to the MongoDB client
@@ -1461,9 +1585,9 @@ def remove_slice_from_overlay(overlayid, _slice):
 
 
 # Remove many slices from an overlay
-def remove_many_slices_from_overlay(overlayid, slices):
+def remove_many_slices_from_overlay(overlayid, tenantid, slices):
     # Build the query
-    query = {'_id': ObjectId(overlayid)}
+    query = {'_id': ObjectId(overlayid), 'tenantid': tenantid}
     success = None
     try:
         # Get a reference to the MongoDB client
@@ -1491,10 +1615,10 @@ def remove_many_slices_from_overlay(overlayid, slices):
 
 
 # Retrieve the slices contained in a given overlay
-def get_slices_in_overlay(overlayid):
+def get_slices_in_overlay(overlayid, tenantid):
     # Get the overlays
     logging.debug('Getting the slices in the overlay %s' % overlayid)
-    overlay = get_overlay(overlayid)
+    overlay = get_overlay(overlayid, tenantid)
     # Extract the slices from the overlay
     slices = None
     if overlay is not None:
@@ -2114,7 +2238,7 @@ def release_ipv4_address(deviceid):
     success = None
     try:
         # Find the device
-        device = get_device(deviceid)
+        device = get_device(deviceid, tenantid)
         if device is not None:
             # Get the mgmtip
             mgmtip = device['mgmtip']
@@ -2163,7 +2287,7 @@ def release_ipv6_address(deviceid):
     success = None
     try:
         # Find the device
-        device = get_device(deviceid)
+        device = get_device(deviceid, tenantid)
         if device is not None:
             # Get the mgmtip
             mgmtip = device['mgmtip']
@@ -2301,7 +2425,7 @@ def get_new_mgmt_ipv6_net(deviceid):
 
 
 # Release the IPv4 net associated to the device
-def release_ipv4_net(deviceid):
+def release_ipv4_net(deviceid, tenantid):
     # Build the query
     query = {'config': 'mgmt_counters'}
     # Get a reference to the MongoDB client
@@ -2315,7 +2439,7 @@ def release_ipv4_net(deviceid):
     success = None
     try:
         # Find the device
-        device = get_device(deviceid)
+        device = get_device(deviceid, tenantid)
         if device is not None:
             # Get the mgmtip
             mgmtip = device['mgmtip']
@@ -2347,7 +2471,7 @@ def release_ipv4_net(deviceid):
 
 
 # Release the IPv6 net associated to the device
-def release_ipv6_net(deviceid):
+def release_ipv6_net(deviceid, tenantid):
     # Build the query
     query = {'config': 'mgmt_counters'}
     # Get a reference to the MongoDB client
@@ -2357,11 +2481,12 @@ def release_ipv6_net(deviceid):
     # Get the configuration collection
     config = db.configuration
     # Release the IPv6 net
-    logging.debug('Release IPv6 net %s' % net)
+    logging.debug('Release IPv6 net for device %s and tenant %s'
+                  % (deviceid, tenantid))
     success = None
     try:
         # Find the device
-        device = get_device(deviceid)
+        device = get_device(deviceid, tenantid)
         if device is not None:
             # Get the mgmtip
             mgmtip = device['mgmtip']

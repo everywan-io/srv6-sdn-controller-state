@@ -9,6 +9,7 @@ import logging
 import urllib.parse
 from ipaddress import IPv4Interface, IPv6Interface, IPv4Network, IPv6Network
 from srv6_sdn_controller_state import utils
+from srv6_sdn_openssl import utils as srv6_sdn_utils
 import itertools
 
 
@@ -19,6 +20,8 @@ DEFAULT_MONGODB_USERNAME = 'root'
 DEFAULT_MONGODB_PASSWORD = '12345678'
 
 DEFAULT_VXLAN_PORT = 4789
+
+USE_HOSTNAME_FOR_MANAGEMENT = True
 
 # Table where we store our seg6local routes
 LOCAL_SID_TABLE = 1
@@ -66,6 +69,8 @@ def get_mongodb_session(host=DEFAULT_MONGODB_HOST,
 # Register a device
 def register_device(deviceid, features, interfaces, mgmtip,
                     tenantid):
+    # Get the hostname of the device
+    hostname = srv6_sdn_utils.get_device_hostname(tenantid, deviceid)
     # Build the document to insert
     device = {
         'deviceid': deviceid,
@@ -73,6 +78,7 @@ def register_device(deviceid, features, interfaces, mgmtip,
         'description': None,
         'features': features,
         'interfaces': interfaces,
+        'hostname': hostname,
         'mgmtip': mgmtip,
         'mgmt_mac': None,
         'tenantid': tenantid,
@@ -2544,6 +2550,44 @@ def get_device_mgmtip(tenantid, deviceid):
         logging.error('Cannot establish a connection to the db')
     # Return the management IP or None in case of failure
     return mgmtip
+
+
+# Return the hostname of the device
+def get_device_hostname(tenantid, deviceid):
+    # Build the query
+    query = {'deviceid': deviceid}
+    if tenantid is not None:
+        query['tenantid'] = tenantid
+    # Get a reference to the MongoDB client
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Get the devices collection
+    devices = db.devices
+    # Get device hostname
+    logging.debug('Getting hostname of device %s (tenant %s)'
+                  % (deviceid, tenantid))
+    hostname = None
+    try:
+        # Get the device
+        device = devices.find_one(query)
+        if device is None:
+            logging.debug('The device does not exist')
+        else:
+            hostname = device['hostname']
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return the hostname or None in case of failure
+    return hostname
+
+
+# Return an address (IP or hostname) for a device
+def get_device_address(tenantid, deviceid,
+                       hostname=USE_HOSTNAME_FOR_MANAGEMENT):
+    if hostname:
+        return get_device_hostname(tenantid, deviceid)
+    else:
+        return get_device_mgmtip
 
 
 # Device authentication

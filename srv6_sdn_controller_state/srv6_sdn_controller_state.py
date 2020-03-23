@@ -70,7 +70,7 @@ def get_mongodb_session(host=DEFAULT_MONGODB_HOST,
 def register_device(deviceid, features, interfaces, mgmtip,
                     tenantid):
     # Get the hostname of the device
-    hostname = srv6_sdn_utils.get_device_hostname(tenantid, deviceid)
+    hostname = srv6_sdn_utils.get_device_hostname(deviceid, tenantid)
     # Build the document to insert
     device = {
         'deviceid': deviceid,
@@ -2553,7 +2553,7 @@ def get_device_mgmtip(tenantid, deviceid):
 
 
 # Return the hostname of the device
-def get_device_hostname(tenantid, deviceid):
+def get_device_hostname(deviceid, tenantid):
     # Build the query
     query = {'deviceid': deviceid}
     if tenantid is not None:
@@ -2585,7 +2585,7 @@ def get_device_hostname(tenantid, deviceid):
 def get_device_address(tenantid, deviceid,
                        hostname=USE_HOSTNAME_FOR_MANAGEMENT):
     if hostname:
-        return get_device_hostname(tenantid, deviceid)
+        return get_device_hostname(deviceid, tenantid)
     else:
         return get_device_mgmtip
 

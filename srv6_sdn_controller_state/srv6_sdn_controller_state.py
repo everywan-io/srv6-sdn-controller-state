@@ -15,6 +15,7 @@ import itertools
 
 # Global variables
 DEFAULT_MONGODB_HOST = '172.1.40.145'
+#DEFAULT_MONGODB_HOST = '2000:0:25:24::2'
 DEFAULT_MONGODB_PORT = 27017
 DEFAULT_MONGODB_USERNAME = 'root'
 DEFAULT_MONGODB_PASSWORD = '12345678'
@@ -483,7 +484,8 @@ def get_interface(deviceid, tenantid, interface_name):
         # Get the devices collection
         devices = db.devices
         # Find the interface
-        interfaces = devices.find_one(query, filter)['interfaces']
+        interfaces = devices.find_one(query, filter).get('interfaces', [])
+
         if len(interfaces) == 0:
             # Interface not found
             logging.debug('Interface not found')
@@ -609,7 +611,7 @@ def get_ext_ip_addresses(deviceid, tenantid, interface_name):
     # Find the external IP addresses by device ID and interface name
     logging.debug('Retrieving external IP addresses for device %s '
                   'and interface %s (tenant %s)'
-                  % (deviceid, interface_name))
+                  % (deviceid, interface_name, tenantid))
     interface = get_interface(deviceid, tenantid, interface_name)
     addrs = None
     if interface is not None:
@@ -645,7 +647,7 @@ def get_ipv4_subnets(deviceid, tenantid, interface_name):
 # Get device's IPv6 subnets
 def get_ipv6_subnets(deviceid, tenantid, interface_name):
     # Find the IPv6 subnets by device ID and interface
-    logging.debug('Retrieving IPv6 subnets for device %s'
+    logging.debug('Retrieving IPv6 subnets for device %s (tenant %s)'
                   % (deviceid, tenantid))
     interface = get_interface(deviceid, tenantid, interface_name)
     subnets = None
@@ -1001,7 +1003,8 @@ def dec_and_get_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
         # Get the devices collection
         devices = db.devices
         # Find the device
-        logging.debug('Getting the device %s (tenant %s)' % (deviceid, tenantid))
+        logging.debug('Getting the device %s (tenant %s)' %
+                      (deviceid, tenantid))
         # Decrease the counter for the tunnel mode
         device = devices.find_one_and_update(
             query, {'$inc': {'stats.counters.tunnels.$.counter': -1}},
@@ -1077,32 +1080,54 @@ def inc_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
         logging.debug('Getting the overlay %s (tenant %s)'
                       % (overlayid, tenantid))
         # Build query
-        query = {'_id': ObjectId(overlayid),
-                 'tenantid': tenantid,
-                 'stats.counters.tunnels.deviceid': {'$ne': deviceid},
-                 'stats.counters.tunnels.dest_slice': {'$ne': dest_slice}}
+        query = {
+            '_id': ObjectId(overlayid),
+            'tenantid': tenantid,
+            'stats.counters.tunnels': {
+                '$not': {
+                    '$elemMatch': {
+                        'deviceid': deviceid,
+                        'dest_slice': dest_slice
+                    }
+                }
+            }
+        }
         # Build the update
-        update = {'$push': {
-            'stats.counters.tunnels': {'deviceid': deviceid, 'dest_slice': dest_slice, 'counter': 0}}}
+        update = {
+            '$push': {
+                'stats.counters.tunnels': {
+                    'deviceid': deviceid,
+                    'dest_slice': dest_slice,
+                    'counter': 0
+                }
+            }
+        }
         # If the counter does not exist, create it
-        overlays.update_one(query, update)
+        res = overlays.update_one(query, update)
         # Build the query
-        query = {'_id': ObjectId(overlayid),
-                 'tenantid': tenantid,
-                 'stats.counters.tunnels.deviceid': deviceid,
-                 'stats.counters.tunnels.dest_slice': dest_slice}
+        query = {
+            '_id': ObjectId(overlayid),
+            'tenantid': tenantid,
+            'stats.counters.tunnels': {
+                '$elemMatch': {
+                    'deviceid': deviceid,
+                    'dest_slice': dest_slice
+                }
+            }
+        }
         # Build the update
         update = {'$inc': {'stats.counters.tunnels.$.counter': 1}}
         # Increase the tunnels counter for the overlay
         overlay = overlays.find_one_and_update(
-            query, update)
+            query, update, return_document=ReturnDocument.AFTER)
         # Return the counter if exists, 0 otherwise
         counter = 0
         for tunnel in overlay['stats']['counters']['tunnels']:
             if deviceid == tunnel['deviceid'] and \
                     dest_slice == tunnel['dest_slice']:
                 counter = tunnel['counter']
-        logging.debug('Counter before the increment: %s' % counter)
+                break
+        logging.debug('Counter after the increment: %s' % counter)
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the counter if success,
@@ -1127,7 +1152,8 @@ def dec_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
         # Get the overlays collection
         overlays = db.overlays
         # Find the overlay
-        logging.debug('Getting the overlay %s (tenant %s)' % (overlayid, tenantid))
+        logging.debug('Getting the overlay %s (tenant %s)' %
+                      (overlayid, tenantid))
         # Decrease the counter for the tunnel mode
         overlay = overlays.find_one_and_update(
             query, {'$inc': {'stats.counters.tunnels.$.counter': -1}},
@@ -1279,11 +1305,40 @@ def set_tunnel_mode(deviceid, tenantid, tunnel_mode):
     return success
 
 
+def add_vnis_to_device(self, deviceid, tenantid, vnis):
+    # Build the query
+    query = {'deviceid': deviceid, 'tenantid': tenantid}
+    # Build the update
+    update = {'$push': {'vnis': vnis}}
+    success = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the devices collection
+        devices = db.devices
+        # Find the device
+        logging.debug('Update device %s tunnel mode' % deviceid)
+        #logging.debug('New tunnel mode: %s' % tunnel_mode)
+        # Get the device
+        success = devices.update_one(query, update).matched_count == 1
+        if not success:
+            logging.error('Cannot update tunnel mode')
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return True if success,
+    # False if failure,
+    # None if error occurred in connection to the db
+    return success
+
+
 ''' Functions operating on the overlays collection '''
 
 
 # Create overlay
-def create_overlay(name, type, slices, tenantid, tunnel_mode):
+def create_overlay(name, type, slices,
+                   tenantid, tunnel_mode, topo_type, hub=None, max_num_of_wans=-1):
     # Build the document
     overlay = {
         'name': name,
@@ -1291,7 +1346,11 @@ def create_overlay(name, type, slices, tenantid, tunnel_mode):
         'type': type,
         'slices': slices,
         'tunnel_mode': tunnel_mode,
-        'vni': None
+        'topo_type': topo_type,
+        'hub': hub,
+        'vni': [],
+        'stats': {'counters': {'tunnels': []}},
+        'max_num_of_wans': max_num_of_wans
     }
     overlayid = None
     try:
@@ -2412,7 +2471,7 @@ def get_new_mgmt_ipv6_net(deviceid):
                     mgmtnet = None
             else:
                 # No reusable IPv6, allocate a new mgmt IPv6 net
-                net = IPv4Network(
+                net = IPv6Network(
                     mgmt_counters['mgmt_subnet_ipv6']['mgmt_net'])
                 last_subnet_index = mgmt_counters['mgmt_subnet_ipv6']['last_allocated_subnet_index']
                 last_subnet_index += 1
@@ -2582,7 +2641,7 @@ def get_device_hostname(deviceid, tenantid):
 
 
 # Return an address (IP or hostname) for a device
-def get_device_address(tenantid, deviceid,
+def get_device_address(deviceid, tenantid,
                        hostname=USE_HOSTNAME_FOR_MANAGEMENT):
     if hostname:
         return get_device_hostname(deviceid, tenantid)
@@ -2597,8 +2656,8 @@ def authenticate_device(token):
     return True, '1'
 
 
-# Allocate and return a new VNI for the overlay
-def get_new_vni(overlay_name, tenantid):
+# Allocate and return new VNIs for the overlay
+def get_new_vni(overlay_name, tenantid, deviceid=None, wan_interface=None):
     # Get reference to mongo DB client
     client = get_mongodb_session()
     # Get the database
@@ -2607,47 +2666,62 @@ def get_new_vni(overlay_name, tenantid):
     overlays = db.overlays
     # Get tenants collection
     tenants = db.tenants
-    # The overlay of the considered tenant already has a VNI
-    if overlays.find_one({'name': overlay_name, 'tenantid': tenantid}, {'vni': 1})['vni'] != None:
-        return -1
-    # Overlay does not have a VNI
+    # Get VNIs
+    # Check if a reusable VNI is available
+    if not tenants.find_one({'tenantid': tenantid, 'reu_vni': {'$size': 0}}):
+        # Pop vni from the array
+        vnis = tenants.find_one({
+            'tenantid': tenantid})['reu_vni']
+        vni = vnis.pop()
+        tenants.find_one_and_update({
+            'tenantid': tenantid}, {'$set': {'reu_vni': vnis}})
     else:
-        # Check if a reusable VNI is available
-        if not tenants.find_one({'tenantid': tenantid, 'reu_vni': {'$size': 0}}):
-            # Pop vni from the array
-            vnis = tenants.find_one({
-                'tenantid': tenantid})['reu_vni']
-            vni = vnis.pop()
-            tenants.find_one_and_update({
-                'tenantid': tenantid}, {'$set': {'reu_vni': vnis}})
-        else:
-            # If not, get a new VNI
+        # If not, get a new VNI
+        tenants.find_one_and_update({
+            'tenantid': tenantid}, {'$inc': {'vni_index': +1}})
+        while tenants.find_one({'tenantid': tenantid}, {'vni_index': 1})['vni_index'] in RESERVED_VNI:
+            # Skip reserved VNI
             tenants.find_one_and_update({
                 'tenantid': tenantid}, {'$inc': {'vni_index': +1}})
-            while tenants.find_one({'tenantid': tenantid}, {'vni_index': 1})['vni_index'] in RESERVED_VNI:
-                # Skip reserved VNI
-                tenants.find_one_and_update({
-                    'tenantid': tenantid}, {'$inc': {'vni_index': +1}})
-            # Get VNI
-            vni = tenants.find_one({
-                'tenantid': tenantid}, {'vni_index': 1})['vni_index']
+        # Get VNI
+        vni = tenants.find_one({
+            'tenantid': tenantid}, {'vni_index': 1})['vni_index']
+    if deviceid is None:
         # Assign the VNI to the overlay
-        overlays.find_one_and_update({
-            'tenantid': tenantid,
-            'name': overlay_name}, {
-            '$set': {'vni': vni}
+        new_vni = {
+            'vni': vni
         }
-        )
-        # Increase assigned VNIs counter
-        tenants.find_one_and_update({
-            'tenantid': tenantid}, {'$inc': {'assigned_vni': +1}})
-        # And return
-        return vni
+    elif wan_interface is None:
+        # Assign the VNI to the overlay and device
+        new_vni = {
+            'deviceid': deviceid,
+            'vni': vni
+        }
+    else:
+        # Assign the VNI to the overlay, device
+        # and WAN interface
+        new_vni = {
+            'deviceid': deviceid,
+            'wan': wan_interface,
+            'vni': vni
+        }
+    # Assign the VNI to the overlay
+    overlays.find_one_and_update({
+        'tenantid': tenantid,
+        'name': overlay_name}, {
+        '$push': {'vni': new_vni}
+    }
+    )
+    # Increase assigned VNIs counter
+    tenants.find_one_and_update({
+        'tenantid': tenantid}, {'$inc': {'assigned_vni': +1}})
+    # And return
+    return vni
 
 
 # Return the VNI assigned to the Overlay
 # If the Overlay has no assigned VNI, return -1
-def get_vni(overlay_name, tenantid):
+def get_vni(overlay_name, tenantid, deviceid=None, wan_interface=None):
     # Get reference to mongo DB client
     client = get_mongodb_session()
     # Get the database
@@ -2655,12 +2729,33 @@ def get_vni(overlay_name, tenantid):
     # Get overlays collection
     overlays = db.overlays
     # Get VNI
-    vni = overlays.find_one({
+    vnis = overlays.find_one({
         'name': overlay_name, 'tenantid': tenantid}, {'vni': 1})['vni']
-    if vni == None:
+    res = None
+    if deviceid is None:
+        for vni in vnis:
+            if 'deviceid' not in vni:
+                res = vni['vni']
+                break
+    elif wan_interface is None:
+        for vni in vnis:
+            if 'deviceid' in vni and \
+                    deviceid == vni['deviceid'] and \
+                    'wan' not in vni:
+                res = vni['vni']
+                break
+    else:
+        for vni in vnis:
+            if 'deviceid' in vni and \
+                    deviceid == vni['deviceid'] and \
+                    'wan' in vni and \
+                    wan_interface == vni['wan']:
+                res = vni['vni']
+                break
+    if res == None:
         return -1
     else:
-        return vni
+        return res
 
 
 # Release VNI and mark it as reusable

@@ -13,7 +13,7 @@ import itertools
 
 
 # Global variables
-DEFAULT_MONGODB_HOST = '172.1.40.145'
+DEFAULT_MONGODB_HOST = '0.0.0.0'
 DEFAULT_MONGODB_PORT = 27017
 DEFAULT_MONGODB_USERNAME = 'root'
 DEFAULT_MONGODB_PASSWORD = '12345678'
@@ -639,7 +639,7 @@ def get_ipv4_subnets(deviceid, tenantid, interface_name):
 # Get device's IPv6 subnets
 def get_ipv6_subnets(deviceid, tenantid, interface_name):
     # Find the IPv6 subnets by device ID and interface
-    logging.debug('Retrieving IPv6 subnets for device %s'
+    logging.debug('Retrieving IPv6 subnets for device %s, tenantid %s'
                   % (deviceid, tenantid))
     interface = get_interface(deviceid, tenantid, interface_name)
     subnets = None

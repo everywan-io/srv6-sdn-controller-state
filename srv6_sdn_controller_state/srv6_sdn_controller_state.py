@@ -8,6 +8,7 @@ import datetime
 import logging
 import urllib.parse
 from ipaddress import IPv4Interface, IPv6Interface, IPv4Network, IPv6Network
+from ipaddress import is_global
 from srv6_sdn_controller_state import utils
 import itertools
 
@@ -66,7 +67,7 @@ def get_mongodb_session(host=DEFAULT_MONGODB_HOST,
 
 # Register a device
 def register_device(deviceid, features, interfaces, mgmtip,
-                    tenantid):
+                    tenantid, sid_prefix=None):
     # Build the document to insert
     device = {
         'deviceid': deviceid,
@@ -91,7 +92,8 @@ def register_device(deviceid, features, interfaces, mgmtip,
             }
         },
         'vtep_ip_addr': None,
-        'registration_timestamp': str(datetime.datetime.utcnow())
+        'registration_timestamp': str(datetime.datetime.utcnow()),
+        'sid_prefix': sid_prefix
     }
     # Register the device
     logging.debug('Registering device on DB: %s' % device)
@@ -709,6 +711,44 @@ def get_loopbacknet_ipv6(deviceid, tenantid):
         return IPv6Interface(loopbackip).network.__str__()
     else:
         return None
+
+
+# Get device's global IPv6 addresses
+def get_global_ipv6_addresses(deviceid, tenantid, interface_name):
+    # Find the IPv6 addresses by device ID and interface
+    logging.debug('Retrieving global IPv6 addresses for device %s (tenant %s)'
+                  % (deviceid, tenantid))
+    interface = get_interface(deviceid, tenantid, interface_name)
+    addrs = None
+    if interface is not None:
+        # Extract the addresses
+        _addrs = interface['ipv6_addrs']
+        addrs = []
+        for addr in _addrs:
+            if is_global(addr):
+                addrs.append(addr)
+        logging.debug('Global IPv6 addresses: %s' % addrs)
+    # Return the global IPv6 addresses associated to the
+    # interface if the interface exists,
+    # None if the interface does not exist or
+    # None if an error occurred during the connection to the db
+    return addrs
+
+
+# Get router's SID prefix
+def get_sid_prefix(deviceid, tenantid):
+    logging.debug('Retrieving SID prefix for device %s' % deviceid)
+    # Get the device
+    device = get_device(deviceid, tenantid)
+    sid_prefix = None
+    if device is not None:
+        # Get the SID prefix
+        sid_prefix = device['sid_prefix']
+        logging.debug('SID prefix: %s' % sid_prefix)
+    # Return the SID prefix if the device exists,
+    # None if the device does not exist or
+    # None if an error occurred during the connection to the db
+    return sid_prefix
 
 
 # Get router's management IP address

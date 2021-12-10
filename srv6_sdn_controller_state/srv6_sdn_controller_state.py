@@ -8,7 +8,6 @@ import datetime
 import logging
 import urllib.parse
 from ipaddress import IPv4Interface, IPv6Interface, IPv4Network, IPv6Network
-from ipaddress import IPv6Address
 from srv6_sdn_controller_state import utils
 import itertools
 
@@ -725,7 +724,7 @@ def get_global_ipv6_addresses(deviceid, tenantid, interface_name):
         _addrs = interface['ipv6_addrs']
         addrs = []
         for addr in _addrs:
-            if IPv6Address(addr).is_global:
+            if IPv6Interface(addr).is_global:
                 addrs.append(addr)
         logging.debug('Global IPv6 addresses: %s' % addrs)
     # Return the global IPv6 addresses associated to the

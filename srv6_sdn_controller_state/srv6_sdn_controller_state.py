@@ -15,6 +15,8 @@ import itertools
 # Global variables
 #DEFAULT_MONGODB_HOST = '0.0.0.0'
 DEFAULT_MONGODB_HOST = '160.80.105.253'
+#DEFAULT_MONGODB_HOST = '2000:0:25:24::2'
+
 DEFAULT_MONGODB_PORT = 27017
 DEFAULT_MONGODB_USERNAME = 'root'
 DEFAULT_MONGODB_PASSWORD = '12345678'
@@ -34,16 +36,12 @@ RESERVED_VTEP_IP = [0, 65536]
 # Set logging level
 logging.basicConfig(level=logging.DEBUG)
 
-# MongoDB client
-client = None
-
 
 # Get a reference to the MongoDB client
 def get_mongodb_session(host=DEFAULT_MONGODB_HOST,
                         port=DEFAULT_MONGODB_PORT,
                         username=DEFAULT_MONGODB_USERNAME,
                         password=DEFAULT_MONGODB_PASSWORD):
-    global client
     # Percent-escape username
     username = urllib.parse.quote_plus(username)
     # Percent-escape password
@@ -53,11 +51,11 @@ def get_mongodb_session(host=DEFAULT_MONGODB_HOST,
                   'to the db (%s:%s)' % (host, port))
     # Adjust IP address representation
     host = '[%s]' % host
-    if client is None:
-        client = pymongo.MongoClient(host=host,
-                                     port=port,
-                                     username=username,
-                                     password=password)
+    # Get a reference to the MongoDB client
+    client = pymongo.MongoClient(host=host,
+                                port=port,
+                                username=username,
+                                password=password)
     return client
 
 
@@ -66,7 +64,7 @@ def get_mongodb_session(host=DEFAULT_MONGODB_HOST,
 
 # Register a device
 def register_device(deviceid, features, interfaces, mgmtip,
-                    tenantid, sid_prefix=None):
+                    tenantid, sid_prefix=None, client=None):
     # Build the document to insert
     device = {
         'deviceid': deviceid,
@@ -99,7 +97,8 @@ def register_device(deviceid, features, interfaces, mgmtip,
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -117,7 +116,7 @@ def register_device(deviceid, features, interfaces, mgmtip,
 
 
 # Unregister a device
-def unregister_device(deviceid, tenantid):
+def unregister_device(deviceid, tenantid, client=None):
     # Build the document to insert
     device = {'deviceid': deviceid, 'tenantid': tenantid}
     # Unregister the device
@@ -126,7 +125,8 @@ def unregister_device(deviceid, tenantid):
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -144,7 +144,7 @@ def unregister_device(deviceid, tenantid):
 
 
 # Unregister all devices of a tenant
-def unregister_devices_by_tenantid(tenantid):
+def unregister_devices_by_tenantid(tenantid, client=None):
     # Build the filter
     device = {'tenantid': tenantid}
     # Delete all the devices in the collection
@@ -152,7 +152,8 @@ def unregister_devices_by_tenantid(tenantid):
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -169,13 +170,14 @@ def unregister_devices_by_tenantid(tenantid):
 
 
 # Unregister all devices
-def unregister_all_devices():
+def unregister_all_devices(client=None):
     # Delete all the devices in the collection
     logging.debug('Unregistering all the devices')
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -194,7 +196,7 @@ def unregister_all_devices():
 # Update management information
 def update_mgmt_info(deviceid, tenantid, mgmtip, interfaces, tunnel_mode, nat_type,
                      device_external_ip, device_external_port,
-                     device_vtep_mac, vxlan_port):
+                     device_vtep_mac, vxlan_port, client=None):
     # Build the query
     query = [{'deviceid': deviceid, 'tenantid': tenantid}]
     for interface in interfaces:
@@ -220,7 +222,8 @@ def update_mgmt_info(deviceid, tenantid, mgmtip, interfaces, tunnel_mode, nat_ty
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -249,7 +252,7 @@ def update_mgmt_info(deviceid, tenantid, mgmtip, interfaces, tunnel_mode, nat_ty
 
 
 # Get devices
-def get_devices(deviceids=None, tenantid=None, return_dict=False):
+def get_devices(deviceids=None, tenantid=None, return_dict=False, client=None):
     # Build the query
     query = dict()
     if tenantid is not None:
@@ -262,7 +265,8 @@ def get_devices(deviceids=None, tenantid=None, return_dict=False):
     res = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -285,7 +289,7 @@ def get_devices(deviceids=None, tenantid=None, return_dict=False):
 
 
 # Get a device
-def get_device(deviceid, tenantid):
+def get_device(deviceid, tenantid, client=None):
     # Build the query
     query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Find the device
@@ -293,7 +297,8 @@ def get_device(deviceid, tenantid):
     device = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -309,13 +314,14 @@ def get_device(deviceid, tenantid):
 
 # Return True if a device exists,
 # False otherwise
-def device_exists(deviceid, tenantid):
+def device_exists(deviceid, tenantid, client=None):
     # Build the query
     device = {'deviceid': deviceid, 'tenantid': tenantid}
     device_exists = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -339,13 +345,14 @@ def device_exists(deviceid, tenantid):
 
 # Return True if all the devices exist,
 # False otherwise
-def devices_exists(deviceids):
+def devices_exists(deviceids, client=None):
     # Build the query
     query = {'deviceid': {'$in': deviceids}}
     devices_exist = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -368,11 +375,11 @@ def devices_exists(deviceids):
 
 # Return True if a device exists and is in enabled state,
 # False otherwise
-def is_device_enabled(deviceid, tenantid):
+def is_device_enabled(deviceid, tenantid, client=None):
     # Get the device
     logging.debug('Searching the device %s (tenant %s)'
                   % (deviceid, tenantid))
-    device = get_device(deviceid, tenantid)
+    device = get_device(deviceid=deviceid, tenantid=tenantid, client=client)
     res = None
     if device is not None:
         # Get the status of the device
@@ -389,11 +396,11 @@ def is_device_enabled(deviceid, tenantid):
 
 # Return True if a device exists and is in configured state,
 # False otherwise
-def is_device_configured(deviceid, tenantid):
+def is_device_configured(deviceid, tenantid, client=None):
     # Get the device
     logging.debug('Searching the device %s (tenant %s)'
                   % (deviceid, tenantid))
-    device = get_device(deviceid, tenantid)
+    device = get_device(deviceid=deviceid, tenantid=tenantid, client=client)
     res = None
     if device is not None:
         # Get the status of the device
@@ -410,11 +417,11 @@ def is_device_configured(deviceid, tenantid):
 
 # Return True if a device exists and is in connected state,
 # False otherwise
-def is_device_connected(deviceid, tenantid):
+def is_device_connected(deviceid, tenantid, client=None):
     # Get the device
     logging.debug('Searching the device %s (tenant %s)'
                   % (deviceid, tenantid))
-    device = get_device(deviceid, tenantid)
+    device = get_device(deviceid=deviceid, tenantid=tenantid, client=client)
     res = None
     if device is not None:
         # Get the status of the device
@@ -431,7 +438,7 @@ def is_device_connected(deviceid, tenantid):
 
 # Return True if an interface exists on a given device,
 # False otherwise
-def interface_exists_on_device(deviceid, tenantid, interface_name):
+def interface_exists_on_device(deviceid, tenantid, interface_name, client=None):
     # Build the query
     query = {'deviceid': deviceid, 'tenantid': tenantid,
              'interfaces.name': interface_name}
@@ -441,7 +448,8 @@ def interface_exists_on_device(deviceid, tenantid, interface_name):
     exists = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -463,7 +471,7 @@ def interface_exists_on_device(deviceid, tenantid, interface_name):
 
 
 # Return an interface of a device
-def get_interface(deviceid, tenantid, interface_name):
+def get_interface(deviceid, tenantid, interface_name, client=None):
     logging.debug('Getting the interface %s of device %s (tenant %s)' %
                   (interface_name, deviceid, tenantid))
     # Build the query
@@ -473,7 +481,8 @@ def get_interface(deviceid, tenantid, interface_name):
     interface = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -493,11 +502,11 @@ def get_interface(deviceid, tenantid, interface_name):
 
 
 # Return all the interfaces of a device
-def get_interfaces(deviceid, tenantid):
+def get_interfaces(deviceid, tenantid, client=None):
     # Get the device
     logging.debug('Getting the interfaces of device %s '
                   '(tenant %s)' % (deviceid, tenantid))
-    device = get_device(deviceid, tenantid)
+    device = get_device(deviceid=deviceid, tenantid=tenantid, client=client)
     interfaces = None
     if device is not None:
         # Return the interfaces
@@ -508,10 +517,11 @@ def get_interfaces(deviceid, tenantid):
 
 
 # Get device's IPv4 addresses
-def get_ipv4_addresses(deviceid, tenantid, interface_name):
+def get_ipv4_addresses(deviceid, tenantid, interface_name, client=None):
     # Find the IPv4 addresses by device ID and interface
     logging.debug('Retrieving IPv4 addresses for device %s' % deviceid)
-    interface = get_interface(deviceid, tenantid, interface_name)
+    interface = get_interface(deviceid=deviceid, tenantid=tenantid,
+        interface_name=interface_name, client=client)
     addrs = None
     if interface is not None:
         # Extract the addresses
@@ -525,11 +535,12 @@ def get_ipv4_addresses(deviceid, tenantid, interface_name):
 
 
 # Get device's IPv6 addresses
-def get_ipv6_addresses(deviceid, tenantid, interface_name):
+def get_ipv6_addresses(deviceid, tenantid, interface_name, client=None):
     # Find the IPv6 addresses by device ID and interface
     logging.debug('Retrieving IPv6 addresses for device %s (tenant %s)'
                   % (deviceid, tenantid))
-    interface = get_interface(deviceid, tenantid, interface_name)
+    interface = get_interface(deviceid=deviceid, tenantid=tenantid,
+        interface_name=interface_name, client=client)
     addrs = None
     if interface is not None:
         # Extract the addresses
@@ -543,12 +554,13 @@ def get_ipv6_addresses(deviceid, tenantid, interface_name):
 
 
 # Get device's IP addresses
-def get_ip_addresses(deviceid, tenantid, interface_name):
+def get_ip_addresses(deviceid, tenantid, interface_name, client=None):
     # Find the IP addresses by device ID and interface name
     logging.debug('Retrieving IP addresses for device %s '
                   'and interface %s (tenant %s)'
                   % (deviceid, interface_name, tenantid))
-    interface = get_interface(deviceid, tenantid, interface_name)
+    interface = get_interface(deviceid=deviceid, tenantid=tenantid,
+        interface_name=interface_name, client=client)
     addrs = None
     if interface is not None:
         addrs = interface['ipv4_addrs'] + \
@@ -563,12 +575,13 @@ def get_ip_addresses(deviceid, tenantid, interface_name):
 
 
 # Get device's external IPv4 addresses
-def get_ext_ipv4_addresses(deviceid, tenantid, interface_name):
+def get_ext_ipv4_addresses(deviceid, tenantid, interface_name, client=None):
     # Find the external IPv4 addresses by device ID and interface
     logging.debug(
         'Retrieving external IPv4 addresses for device %s (tenant %s)'
         % (deviceid, tenantid))
-    interface = get_interface(deviceid, tenantid, interface_name)
+    interface = get_interface(deviceid=deviceid, tenantid=tenantid,
+        interface_name=interface_name, client=client)
     addrs = None
     if interface is not None:
         # Extract the addresses
@@ -582,12 +595,13 @@ def get_ext_ipv4_addresses(deviceid, tenantid, interface_name):
 
 
 # Get device's external IPv6 addresses
-def get_ext_ipv6_addresses(deviceid, tenantid, interface_name):
+def get_ext_ipv6_addresses(deviceid, tenantid, interface_name, client=None):
     # Find the external IPv6 addresses by device ID and interface
     logging.debug(
         'Retrieving external IPv6 addresses for device %s (tenant %s)'
         % (deviceid, tenantid))
-    interface = get_interface(deviceid, tenantid, interface_name)
+    interface = get_interface(deviceid=deviceid, tenantid=tenantid,
+        interface_name=interface_name, client=client)
     addrs = None
     if interface is not None:
         # Extract the addresses
@@ -601,12 +615,13 @@ def get_ext_ipv6_addresses(deviceid, tenantid, interface_name):
 
 
 # Get device's external IP addresses
-def get_ext_ip_addresses(deviceid, tenantid, interface_name):
+def get_ext_ip_addresses(deviceid, tenantid, interface_name, client=None):
     # Find the external IP addresses by device ID and interface name
     logging.debug('Retrieving external IP addresses for device %s '
                   'and interface %s (tenant %s)'
                   % (deviceid, interface_name))
-    interface = get_interface(deviceid, tenantid, interface_name)
+    interface = get_interface(deviceid=deviceid, tenantid=tenantid,
+        interface_name=interface_name, client=client)
     addrs = None
     if interface is not None:
         addrs = interface['ext_ipv4_addrs'] + \
@@ -621,11 +636,12 @@ def get_ext_ip_addresses(deviceid, tenantid, interface_name):
 
 
 # Get device's IPv4 subnets
-def get_ipv4_subnets(deviceid, tenantid, interface_name):
+def get_ipv4_subnets(deviceid, tenantid, interface_name, client=None):
     # Find the IPv4 subnets by device ID and interface
     logging.debug('Retrieving IPv4 subnets for device %s (tenant %s)'
                   % (deviceid, tenantid))
-    interface = get_interface(deviceid, tenantid, interface_name)
+    interface = get_interface(deviceid=deviceid, tenantid=tenantid,
+        interface_name=interface_name, client=client)
     subnets = None
     if interface is not None:
         # Extract the subnets
@@ -639,11 +655,12 @@ def get_ipv4_subnets(deviceid, tenantid, interface_name):
 
 
 # Get device's IPv6 subnets
-def get_ipv6_subnets(deviceid, tenantid, interface_name):
+def get_ipv6_subnets(deviceid, tenantid, interface_name, client=None):
     # Find the IPv6 subnets by device ID and interface
     logging.debug('Retrieving IPv6 subnets for device %s, tenantid %s'
                   % (deviceid, tenantid))
-    interface = get_interface(deviceid, tenantid, interface_name)
+    interface = get_interface(deviceid=deviceid, tenantid=tenantid,
+        interface_name=interface_name, client=client)
     subnets = None
     if interface is not None:
         # Extract the subnets
@@ -657,12 +674,13 @@ def get_ipv6_subnets(deviceid, tenantid, interface_name):
 
 
 # Get device's IP subnets
-def get_ip_subnets(deviceid, tenantid, interface_name):
+def get_ip_subnets(deviceid, tenantid, interface_name, client=None):
     # Find the IP subnets by device ID and interface name
     logging.debug('Retrieving IP subnets for device %s '
                   'and interface %s (tenant %s)'
                   % (deviceid, interface_name, tenantid))
-    interface = get_interface(deviceid, tenantid, interface_name)
+    interface = get_interface(deviceid=deviceid, tenantid=tenantid,
+        interface_name=interface_name, client=client)
     subnets = None
     if interface is not None:
         subnets = interface['ipv4_subnets'] + \
@@ -677,8 +695,9 @@ def get_ip_subnets(deviceid, tenantid, interface_name):
 
 
 # Get router's IPv4 loopback IP
-def get_loopbackip_ipv4(deviceid, tenantid):
-    addrs = get_ipv4_addresses(deviceid, tenantid, 'lo')
+def get_loopbackip_ipv4(deviceid, tenantid, client=None):
+    addrs = get_ipv4_addresses(deviceid=deviceid, tenantid=tenantid,
+        interface_name='lo', client=client)
     if addrs is not None:
         return addrs[0]
     else:
@@ -686,8 +705,9 @@ def get_loopbackip_ipv4(deviceid, tenantid):
 
 
 # Get router's IPv4 loopback net
-def get_loopbacknet_ipv4(deviceid, tenantid):
-    loopbackip = get_loopbackip_ipv4(deviceid, tenantid)
+def get_loopbacknet_ipv4(deviceid, tenantid, client=None):
+    loopbackip = get_loopbackip_ipv4(deviceid=deviceid, tenantid=tenantid,
+        client=client)
     if loopbackip is not None:
         return IPv4Interface(loopbackip).network.__str__()
     else:
@@ -695,8 +715,9 @@ def get_loopbacknet_ipv4(deviceid, tenantid):
 
 
 # Get router's IPv6 loopback IP
-def get_loopbackip_ipv6(deviceid, tenantid):
-    addrs = get_ipv6_addresses(deviceid, tenantid, 'lo')
+def get_loopbackip_ipv6(deviceid, tenantid, client=None):
+    addrs = get_ipv6_addresses(deviceid=deviceid, tenantid=tenantid,
+        interface_name='lo', client=client)
     if addrs is not None:
         return addrs[0]
     else:
@@ -704,8 +725,9 @@ def get_loopbackip_ipv6(deviceid, tenantid):
 
 
 # Get router's IPv6 loopback net
-def get_loopbacknet_ipv6(deviceid, tenantid):
-    loopbackip = get_loopbackip_ipv6(deviceid, tenantid)
+def get_loopbacknet_ipv6(deviceid, tenantid, client=None):
+    loopbackip = get_loopbackip_ipv6(deviceid=deviceid, tenantid=tenantid,
+        client=client)
     if loopbackip is not None:
         return IPv6Interface(loopbackip).network.__str__()
     else:
@@ -713,11 +735,12 @@ def get_loopbacknet_ipv6(deviceid, tenantid):
 
 
 # Get device's global IPv6 addresses
-def get_global_ipv6_addresses(deviceid, tenantid, interface_name):
+def get_global_ipv6_addresses(deviceid, tenantid, interface_name, client=None):
     # Find the IPv6 addresses by device ID and interface
     logging.debug('Retrieving global IPv6 addresses for device %s (tenant %s)'
                   % (deviceid, tenantid))
-    interface = get_interface(deviceid, tenantid, interface_name)
+    interface = get_interface(deviceid=deviceid, tenantid=tenantid,
+        interface_name=interface_name, client=client)
     addrs = None
     if interface is not None:
         # Extract the addresses
@@ -735,10 +758,10 @@ def get_global_ipv6_addresses(deviceid, tenantid, interface_name):
 
 
 # Get router's SID prefix
-def get_sid_prefix(deviceid, tenantid):
+def get_sid_prefix(deviceid, tenantid, client=None):
     logging.debug('Retrieving SID prefix for device %s' % deviceid)
     # Get the device
-    device = get_device(deviceid, tenantid)
+    device = get_device(deviceid=deviceid, tenantid=tenantid, client=client)
     sid_prefix = None
     if device is not None:
         # Get the SID prefix
@@ -751,10 +774,10 @@ def get_sid_prefix(deviceid, tenantid):
 
 
 # Get router's management IP address
-def get_router_mgmtip(deviceid, tenantid):
+def get_router_mgmtip(deviceid, tenantid, client=None):
     logging.debug('Retrieving management IP for device %s' % deviceid)
     # Get the device
-    device = get_device(deviceid, tenantid)
+    device = get_device(deviceid=deviceid, tenantid=tenantid, client=client)
     mgmtip = None
     if device is not None:
         # Get the management IP address
@@ -767,9 +790,9 @@ def get_router_mgmtip(deviceid, tenantid):
 
 
 # Get WAN interfaces of a device
-def get_wan_interfaces(deviceid, tenantid):
+def get_wan_interfaces(deviceid, tenantid, client=None):
     # Retrieve all the interfaces
-    interfaces = get_interfaces(deviceid, tenantid)
+    interfaces = get_interfaces(deviceid=deviceid, tenantid=tenantid, client=client)
     wan_interfaces = None
     if interfaces is not None:
         # Filter WAN interfaces
@@ -784,9 +807,9 @@ def get_wan_interfaces(deviceid, tenantid):
 
 
 # Get LAN interfaces of a device
-def get_lan_interfaces(deviceid, tenantid):
+def get_lan_interfaces(deviceid, tenantid, client=None):
     # Retrieve all the interfaces
-    interfaces = get_interfaces(deviceid, tenantid)
+    interfaces = get_interfaces(deviceid=deviceid, tenantid=tenantid, client=client)
     lan_interfaces = None
     if interfaces is not None:
         # Filter LAN interfaces
@@ -801,9 +824,9 @@ def get_lan_interfaces(deviceid, tenantid):
 
 
 # Get non-loopback interfaces of a device
-def get_non_loopback_interfaces(deviceid, tenantid):
+def get_non_loopback_interfaces(deviceid, tenantid, client=None):
     # Retrieve all the interfaces
-    interfaces = get_interfaces(deviceid, tenantid)
+    interfaces = get_interfaces(deviceid=deviceid, tenantid=tenantid, client=client)
     non_lo_interfaces = None
     if interfaces is not None:
         # Filter non-loopback interfaces
@@ -818,7 +841,7 @@ def get_non_loopback_interfaces(deviceid, tenantid):
 
 
 # Configure the devices
-def configure_devices(devices):
+def configure_devices(devices, client=None):
     # Build the update statements
     queries = []
     updates = []
@@ -870,7 +893,8 @@ def configure_devices(devices):
     res = True
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -892,7 +916,7 @@ def configure_devices(devices):
 
 
 # Enable or disable a device
-def set_device_enabled_flag(deviceid, tenantid, enabled):
+def set_device_enabled_flag(deviceid, tenantid, enabled, client=None):
     # Build the query
     query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Build the update
@@ -900,7 +924,8 @@ def set_device_enabled_flag(deviceid, tenantid, enabled):
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -920,7 +945,7 @@ def set_device_enabled_flag(deviceid, tenantid, enabled):
 
 
 # Mark the device as configured / unconfigured
-def set_device_configured_flag(deviceid, tenantid, configured):
+def set_device_configured_flag(deviceid, tenantid, configured, client=None):
     # Build the query
     query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Build the update
@@ -928,7 +953,8 @@ def set_device_configured_flag(deviceid, tenantid, configured):
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -948,7 +974,7 @@ def set_device_configured_flag(deviceid, tenantid, configured):
 
 
 # Set / unset 'connected' flag for a device
-def set_device_connected_flag(deviceid, tenantid, connected):
+def set_device_connected_flag(deviceid, tenantid, connected, client=None):
     # Build the query
     query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Build the update
@@ -956,7 +982,8 @@ def set_device_connected_flag(deviceid, tenantid, connected):
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -977,11 +1004,12 @@ def set_device_connected_flag(deviceid, tenantid, connected):
 
 # Get the counter of a tunnel mode on a device and
 # increase the counter
-def get_and_inc_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
+def get_and_inc_tunnel_mode_counter(tunnel_name, deviceid, tenantid, client=None):
     counter = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -1021,7 +1049,7 @@ def get_and_inc_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
 
 # Decrease the counter of a tunnel mode on a device and
 # return the counter after the decrement
-def dec_and_get_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
+def dec_and_get_tunnel_mode_counter(tunnel_name, deviceid, tenantid, client=None):
     # Build the query
     query = {'deviceid': deviceid,
              'tenantid': tenantid,
@@ -1029,7 +1057,8 @@ def dec_and_get_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
     counter = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -1065,13 +1094,14 @@ def dec_and_get_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
 
 
 # Return the number of tunnels configured on a device
-def get_num_tunnels(deviceid, tenantid):
+def get_num_tunnels(deviceid, tenantid, client=None):
     # Build the query
     query = {'deviceid': deviceid, 'tenantid': tenantid}
     num = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -1098,11 +1128,12 @@ def get_num_tunnels(deviceid, tenantid):
 
 
 # Get the counter of tunnels on a device and increase the counter
-def inc_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
+def inc_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice, client=None):
     counter = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the overlays collection
@@ -1146,7 +1177,7 @@ def inc_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
 
 # Decrease the counter of a tunnels on a overlay and
 # return the counter after the decrement
-def dec_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
+def dec_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice, client=None):
     # Build the query
     query = {'_id': ObjectId(overlayid),
              'tenantid': tenantid,
@@ -1155,7 +1186,8 @@ def dec_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
     counter = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the overlays collection
@@ -1192,7 +1224,7 @@ def dec_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
 
 
 # Update device VTEP MAC address
-def update_device_vtep_mac(deviceid, tenantid, device_vtep_mac):
+def update_device_vtep_mac(deviceid, tenantid, device_vtep_mac, client=None):
     # Build the query
     query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Build the update
@@ -1200,7 +1232,8 @@ def update_device_vtep_mac(deviceid, tenantid, device_vtep_mac):
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -1222,7 +1255,7 @@ def update_device_vtep_mac(deviceid, tenantid, device_vtep_mac):
 
 
 # Update device VTEP IP address
-def update_device_vtep_ip(deviceid, tenantid, device_vtep_ip):
+def update_device_vtep_ip(deviceid, tenantid, device_vtep_ip, client=None):
     # Build the query
     query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Build the update
@@ -1230,7 +1263,8 @@ def update_device_vtep_ip(deviceid, tenantid, device_vtep_ip):
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -1252,13 +1286,14 @@ def update_device_vtep_ip(deviceid, tenantid, device_vtep_ip):
 
 
 # Get device VTEP MAC address
-def get_device_vtep_mac(deviceid, tenantid):
+def get_device_vtep_mac(deviceid, tenantid, client=None):
     # Build the query
     query = {'deviceid': deviceid, 'tenantid': tenantid}
     res = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -1278,14 +1313,14 @@ def get_device_vtep_mac(deviceid, tenantid):
     return res
 
 
-def get_tunnel_mode(deviceid, tenantid):
-    device = get_device(deviceid, tenantid)
+def get_tunnel_mode(deviceid, tenantid, client=None):
+    device = get_device(deviceid=deviceid, tenantid=tenantid, client=client)
     if device is None:
         return None
     return device['tunnel_mode']
 
 
-def set_tunnel_mode(deviceid, tenantid, tunnel_mode):
+def set_tunnel_mode(deviceid, tenantid, tunnel_mode, client=None):
     # Build the query
     query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Build the update
@@ -1293,7 +1328,8 @@ def set_tunnel_mode(deviceid, tenantid, tunnel_mode):
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the devices collection
@@ -1317,7 +1353,7 @@ def set_tunnel_mode(deviceid, tenantid, tunnel_mode):
 
 
 # Create overlay
-def create_overlay(name, type, slices, tenantid, tunnel_mode):
+def create_overlay(name, type, slices, tenantid, tunnel_mode, client=None):
     # Build the document
     overlay = {
         'name': name,
@@ -1330,7 +1366,8 @@ def create_overlay(name, type, slices, tenantid, tunnel_mode):
     overlayid = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the overlays collection
@@ -1349,13 +1386,14 @@ def create_overlay(name, type, slices, tenantid, tunnel_mode):
 
 
 # Remove overlay by ID
-def remove_overlay(overlayid, tenantid):
+def remove_overlay(overlayid, tenantid, client=None):
     # Build the filter
     overlay = {'_id': ObjectId(overlayid), 'tenantid': tenantid}
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the overlays collection
@@ -1374,11 +1412,12 @@ def remove_overlay(overlayid, tenantid):
 
 
 # Remove all the overlays
-def remove_all_overlays():
+def remove_all_overlays(client=None):
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the overlays collection
@@ -1397,13 +1436,14 @@ def remove_all_overlays():
 
 
 # Remove all the overlays of a tenant
-def remove_overlays_by_tenantid(tenantid):
+def remove_overlays_by_tenantid(tenantid, client=None):
     # Build the filter
     filter = {'tenantid': tenantid}
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the overlays collection
@@ -1422,13 +1462,14 @@ def remove_overlays_by_tenantid(tenantid):
 
 
 # Get overlay
-def get_overlay(overlayid, tenantid):
+def get_overlay(overlayid, tenantid, client=None):
     # Build the query
     query = {'_id': ObjectId(overlayid), 'tenantid': tenantid}
     overlay = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the overlays collection
@@ -1449,7 +1490,7 @@ def get_overlay(overlayid, tenantid):
 
 
 # Get overlays
-def get_overlays(overlayids=None, tenantid=None):
+def get_overlays(overlayids=None, tenantid=None, client=None):
     # Build the query
     query = dict()
     if tenantid is not None:
@@ -1460,7 +1501,8 @@ def get_overlays(overlayids=None, tenantid=None):
     overlays = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the overlays collection
@@ -1477,13 +1519,14 @@ def get_overlays(overlayids=None, tenantid=None):
 
 
 # Get a overlay by its name
-def get_overlay_by_name(name, tenantid):
+def get_overlay_by_name(name, tenantid, client=None):
     # Build the query
     query = {'name': name, 'tenantid': tenantid}
     overlay = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the overlays collection
@@ -1506,13 +1549,14 @@ def get_overlay_by_name(name, tenantid):
 
 # Return True if an overlay exists
 # with the provided name exists, False otherwise
-def overlay_exists(name, tenantid):
+def overlay_exists(name, tenantid, client=None):
     # Build the query
     query = {'name': name, 'tenantid': tenantid}
     overlay_exists = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the overlays collection
@@ -1535,13 +1579,14 @@ def overlay_exists(name, tenantid):
 
 
 # Add a slice to an overlay
-def add_slice_to_overlay(overlayid, tenantid, _slice):
+def add_slice_to_overlay(overlayid, tenantid, _slice, client=None):
     # Build the query
     query = {'_id': ObjectId(overlayid), 'tenantid': tenantid}
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the overlays collection
@@ -1565,13 +1610,14 @@ def add_slice_to_overlay(overlayid, tenantid, _slice):
 
 
 # Add many slices to an overlay
-def add_many_slices_to_overlay(overlayid, tenantid, slices):
+def add_many_slices_to_overlay(overlayid, tenantid, slices, client=None):
     # Build the query
     query = {'_id': ObjectId(overlayid), 'tenantid': tenantid}
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the overlays collection
@@ -1595,13 +1641,14 @@ def add_many_slices_to_overlay(overlayid, tenantid, slices):
 
 
 # Remove a slice from an overlay
-def remove_slice_from_overlay(overlayid, tenantid, _slice):
+def remove_slice_from_overlay(overlayid, tenantid, _slice, client=None):
     # Build the query
     query = {'_id': ObjectId(overlayid), 'tenantid': tenantid}
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the overlays collection
@@ -1625,13 +1672,14 @@ def remove_slice_from_overlay(overlayid, tenantid, _slice):
 
 
 # Remove many slices from an overlay
-def remove_many_slices_from_overlay(overlayid, tenantid, slices):
+def remove_many_slices_from_overlay(overlayid, tenantid, slices, client=None):
     # Build the query
     query = {'_id': ObjectId(overlayid), 'tenantid': tenantid}
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the overlays collection
@@ -1655,10 +1703,10 @@ def remove_many_slices_from_overlay(overlayid, tenantid, slices):
 
 
 # Retrieve the slices contained in a given overlay
-def get_slices_in_overlay(overlayid, tenantid):
+def get_slices_in_overlay(overlayid, tenantid, client=None):
     # Get the overlays
     logging.debug('Getting the slices in the overlay %s' % overlayid)
-    overlay = get_overlay(overlayid, tenantid)
+    overlay = get_overlay(overlayid=overlayid, tenantid=tenantid, client=client)
     # Extract the slices from the overlay
     slices = None
     if overlay is not None:
@@ -1672,7 +1720,7 @@ def get_slices_in_overlay(overlayid, tenantid):
 
 # Return the overlay which contains the slice,
 # None the slice is not assigned to any overlay
-def get_overlay_containing_slice(_slice, tenantid):
+def get_overlay_containing_slice(_slice, tenantid, client=None):
     # Build the query
     query = {
         'tenantid': tenantid,
@@ -1685,7 +1733,8 @@ def get_overlay_containing_slice(_slice, tenantid):
     overlay = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the overlays collection
@@ -1704,7 +1753,7 @@ def get_overlay_containing_slice(_slice, tenantid):
 
 # Return an overlay to which the device is partecipating,
 # None the device is not part of any overlay
-def get_overlay_containing_device(deviceid, tenantid):
+def get_overlay_containing_device(deviceid, tenantid, client=None):
     # Build the query
     query = {
         'tenantid': tenantid,
@@ -1716,7 +1765,8 @@ def get_overlay_containing_device(deviceid, tenantid):
     overlay = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the overlays collection
@@ -1738,13 +1788,14 @@ def get_overlay_containing_device(deviceid, tenantid):
 
 
 # Return the tenant configuration
-def get_tenant_config(tenantid):
+def get_tenant_config(tenantid, client=None):
     # Build the query
     query = {'tenantid': tenantid}
     config = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the tenants collection
@@ -1764,13 +1815,14 @@ def get_tenant_config(tenantid):
 
 
 # Return information about tenants
-def get_tenant_configs(tenantids):
+def get_tenant_configs(tenantids, client=None):
     # Build the query
     query = {'$in': list(tenantids)}
     configs = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the tenants collection
@@ -1801,9 +1853,9 @@ def get_tenant_configs(tenantids):
 
 # Return the VXLAN port used by the tenant
 # or None if an error occurredduring the connection to the db
-def get_tenant_vxlan_port(tenantid):
+def get_tenant_vxlan_port(tenantid, client=None):
     # Extract the tenant configuration from the database
-    config = get_tenant_config(tenantid)
+    config = get_tenant_config(tenantid=tenantid, client=client)
     if config is not None:
         # Extract the VXLAN port from the tenant configuration
         return config.get('vxlan_port', DEFAULT_VXLAN_PORT)
@@ -1812,13 +1864,14 @@ def get_tenant_vxlan_port(tenantid):
 
 
 # Get tenant ID by token
-def get_tenantid(token):
+def get_tenantid(token, client=None):
     # Build the query
     query = {'token': token}
     tenantid = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the tenants collection
@@ -1837,7 +1890,7 @@ def get_tenantid(token):
 
 
 # Configure a tenant
-def configure_tenant(tenantid, tenant_info=None, vxlan_port=None):
+def configure_tenant(tenantid, tenant_info=None, vxlan_port=None, client=None):
     logging.debug('Configuring tenant %s (info %s, vxlan_port %s)'
                   % (tenantid, tenant_info, vxlan_port))
     # Build the query
@@ -1866,7 +1919,8 @@ def configure_tenant(tenantid, tenant_info=None, vxlan_port=None):
     success = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the tenants collection
@@ -1888,7 +1942,7 @@ def configure_tenant(tenantid, tenant_info=None, vxlan_port=None):
 # Return True if the tenant is configured,
 # False otherwise,
 # None if an error occurred to the connection to the db
-def is_tenant_configured(tenantid):
+def is_tenant_configured(tenantid, client=None):
     logging.debug('Checking if tenant %s already '
                   'received the configuration' % tenantid)
     # Build the query
@@ -1896,7 +1950,8 @@ def is_tenant_configured(tenantid):
     is_config = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the tenants collection
@@ -1918,13 +1973,14 @@ def is_tenant_configured(tenantid):
 
 # Return True if a tenant exists,
 # False otherwise
-def tenant_exists(tenantid):
+def tenant_exists(tenantid, client=None):
     # Build the query
     query = {'tenantid': tenantid}
     tenant_exists = None
     try:
         # Get a reference to the MongoDB client
-        client = get_mongodb_session()
+        if client is None:
+            client = get_mongodb_session()
         # Get the database
         db = client.EveryWan
         # Get the tenants collection
@@ -1946,9 +2002,10 @@ def tenant_exists(tenantid):
 
 
 # Allocate and return a new table ID for a overlay
-def get_new_tableid(overlayid, tenantid):
+def get_new_tableid(overlayid, tenantid, client=None):
     # Get a reference to the MongoDB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get the tenants collection
@@ -1969,7 +2026,7 @@ def get_new_tableid(overlayid, tenantid):
                 # Get a table ID
                 tableid = reusable_tableids.pop()
                 # Assign it to the overlay
-                if assign_tableid_to_overlay(overlayid, tenantid, tableid):
+                if assign_tableid_to_overlay(overlayid=overlayid, tenantid=tenantid, tableid=tableid, client=client):
                     # Remove the table ID from the reusable_tableids list
                     update = {
                         '$set': {'counters.tableid.reusable_tableids': reusable_tableids}}
@@ -1992,7 +2049,7 @@ def get_new_tableid(overlayid, tenantid):
                         logging.debug(
                             'Table ID %s is reserved. Getting new table ID' % tableid)
                     # Assign it to the overlay
-                    if assign_tableid_to_overlay(overlayid, tenantid, tableid):
+                    if assign_tableid_to_overlay(overlayid=overlayid, tenantid=tenantid, tableid=tableid, client=client):
                         # Remove the table ID from the reusable_tableids list
                         update = {
                             '$set': {'counters.tableid.last_allocated_tableid': tableid}}
@@ -2011,11 +2068,12 @@ def get_new_tableid(overlayid, tenantid):
 
 
 # Release a table ID and mark it as reusable
-def release_tableid(overlayid, tenantid):
+def release_tableid(overlayid, tenantid, client=None):
     # Build the query
     query = {'tenantid': tenantid}
     # Get a reference to the MongoDB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get the tenants collection
@@ -2026,7 +2084,7 @@ def release_tableid(overlayid, tenantid):
     success = None
     try:
         # Get the table ID assigned to the overlay
-        tableid = get_tableid(overlayid, tenantid)
+        tableid = get_tableid(overlayid=overlayid, tenantid=tenantid, client=client)
         if tableid is None:
             logging.error('Error while getting table ID assigned to the '
                           'overlay %s' % overlayid)
@@ -2034,7 +2092,7 @@ def release_tableid(overlayid, tenantid):
         else:
             # Remove the table ID from the overlay
             success = remove_tableid_from_overlay(
-                overlayid, tenantid, tableid)
+                overlayid=overlayid, tenantid=tenantid, tableid=tableid, client=client)
             if success is not True:
                 logging.error('Error while removing table ID %s from the '
                               'overlay %s' % (tableid, overlayid))
@@ -2068,11 +2126,12 @@ def release_tableid(overlayid, tenantid):
 
 # Return the table ID assigned to the VPN
 # If the VPN has no assigned table IDs, return None
-def get_tableid(overlayid, tenantid):
+def get_tableid(overlayid, tenantid, client=None):
     # Build the query
     query = {'tenantid': tenantid, '_id': ObjectId(overlayid)}
     # Get a reference to the MongoDB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get the overlays collection
@@ -2095,11 +2154,12 @@ def get_tableid(overlayid, tenantid):
 
 
 # Assign a table ID to an overlay
-def assign_tableid_to_overlay(overlayid, tenantid, tableid):
+def assign_tableid_to_overlay(overlayid, tenantid, tableid, client=None):
     # Build the query
     query = {'tenantid': tenantid, '_id': ObjectId(overlayid)}
     # Get a reference to the MongoDB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get the overlays collection
@@ -2124,13 +2184,14 @@ def assign_tableid_to_overlay(overlayid, tenantid, tableid):
 
 
 # Remove a table ID from an overlay
-def remove_tableid_from_overlay(overlayid, tenantid, tableid):
+def remove_tableid_from_overlay(overlayid, tenantid, tableid, client=None):
     # TODO check if tableid is assigned to the overlay
     #
     # Build the query
     query = {'tenantid': tenantid, '_id': ObjectId(overlayid)}
     # Get a reference to the MongoDB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get the overlays collection
@@ -2156,12 +2217,13 @@ def remove_tableid_from_overlay(overlayid, tenantid, tableid):
 
 # Allocate a new private IPv4 address for the device
 # If the device already has a IPv4 address, return it
-def get_new_mgmt_ipv4(deviceid):
+def get_new_mgmt_ipv4(deviceid, client=None):
     # Device ID = 0 is used for controller
     if deviceid == '0':
         return '169.254.0.1/16'
     # Get a reference to the MongoDB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get the configuration collection
@@ -2210,12 +2272,13 @@ def get_new_mgmt_ipv4(deviceid):
 
 # Allocate a new private IPv6 address for the device
 # If the device already has a IPv6 address, return it
-def get_new_mgmt_ipv6(deviceid):
+def get_new_mgmt_ipv6(deviceid, client=None):
     # Device ID = 0 is used for controller
     if deviceid == '0':
         return 'fcfa::1/16'
     # Get a reference to the MongoDB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get the configuration collection
@@ -2263,11 +2326,12 @@ def get_new_mgmt_ipv6(deviceid):
 
 
 # Release the IPv4 address associated to the device
-def release_ipv4_address(deviceid, tenantid):
+def release_ipv4_address(deviceid, tenantid, client=None):
     # Build the query
     query = {'config': 'mgmt_counters'}
     # Get a reference to the MongoDB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get the configuration collection
@@ -2278,7 +2342,7 @@ def release_ipv4_address(deviceid, tenantid):
     success = None
     try:
         # Find the device
-        device = get_device(deviceid, tenantid)
+        device = get_device(deviceid=deviceid, tenantid=tenantid, client=client)
         if device is not None:
             # Get the mgmtip
             mgmtip = device['mgmtip']
@@ -2312,11 +2376,12 @@ def release_ipv4_address(deviceid, tenantid):
 
 
 # Release the IPv6 address associated to the device
-def release_ipv6_address(deviceid, tenantid):
+def release_ipv6_address(deviceid, tenantid, client=None):
     # Build the query
     query = {'config': 'mgmt_counters'}
     # Get a reference to the MongoDB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get the configuration collection
@@ -2327,7 +2392,7 @@ def release_ipv6_address(deviceid, tenantid):
     success = None
     try:
         # Find the device
-        device = get_device(deviceid, tenantid)
+        device = get_device(deviceid=deviceid, tenantid=tenantid, client=client)
         if device is not None:
             # Get the mgmtip
             mgmtip = device['mgmtip']
@@ -2362,9 +2427,10 @@ def release_ipv6_address(deviceid, tenantid):
 
 # Allocate a new private IPv4 net for the device
 # If the device already has a IPv4 net, return it
-def get_new_mgmt_ipv4_net(deviceid):
+def get_new_mgmt_ipv4_net(deviceid, client=None):
     # Get a reference to the MongoDB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get the configuration collection
@@ -2414,9 +2480,10 @@ def get_new_mgmt_ipv4_net(deviceid):
 
 # Allocate a new private IPv6 net for the device
 # If the device already has a IPv6 net, return it
-def get_new_mgmt_ipv6_net(deviceid):
+def get_new_mgmt_ipv6_net(deviceid, client=None):
     # Get a reference to the MongoDB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get the configuration collection
@@ -2465,11 +2532,12 @@ def get_new_mgmt_ipv6_net(deviceid):
 
 
 # Release the IPv4 net associated to the device
-def release_ipv4_net(deviceid, tenantid):
+def release_ipv4_net(deviceid, tenantid, client=None):
     # Build the query
     query = {'config': 'mgmt_counters'}
     # Get a reference to the MongoDB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get the configuration collection
@@ -2479,7 +2547,7 @@ def release_ipv4_net(deviceid, tenantid):
     success = None
     try:
         # Find the device
-        device = get_device(deviceid, tenantid)
+        device = get_device(deviceid=deviceid, tenantid=tenantid, client=client)
         if device is not None:
             # Get the mgmtip
             mgmtip = device['mgmtip']
@@ -2511,11 +2579,12 @@ def release_ipv4_net(deviceid, tenantid):
 
 
 # Release the IPv6 net associated to the device
-def release_ipv6_net(deviceid, tenantid):
+def release_ipv6_net(deviceid, tenantid, client=None):
     # Build the query
     query = {'config': 'mgmt_counters'}
     # Get a reference to the MongoDB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get the configuration collection
@@ -2526,7 +2595,7 @@ def release_ipv6_net(deviceid, tenantid):
     success = None
     try:
         # Find the device
-        device = get_device(deviceid, tenantid)
+        device = get_device(deviceid=deviceid, tenantid=tenantid, client=client)
         if device is not None:
             # Get the mgmtip
             mgmtip = device['mgmtip']
@@ -2558,13 +2627,14 @@ def release_ipv6_net(deviceid, tenantid):
 
 
 # Return the private IP of the device
-def get_device_mgmtip(tenantid, deviceid):
+def get_device_mgmtip(tenantid, deviceid, client=None):
     # Build the query
     query = {'deviceid': deviceid}
     if tenantid is not None:
         query['tenantid'] = tenantid
     # Get a reference to the MongoDB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get the devices collection
@@ -2587,16 +2657,17 @@ def get_device_mgmtip(tenantid, deviceid):
 
 
 # Device authentication
-def authenticate_device(token):
-    tenantid = get_tenantid(token)
+def authenticate_device(token, client=None):
+    tenantid = get_tenantid(token=token, client=client)
     # return tenantid is not None, tenantid      # TODO for the future...
     return True, '1'
 
 
 # Allocate and return a new VNI for the overlay
-def get_new_vni(overlay_name, tenantid):
+def get_new_vni(overlay_name, tenantid, client=None):
     # Get reference to mongo DB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get overlays collection
@@ -2643,9 +2714,10 @@ def get_new_vni(overlay_name, tenantid):
 
 # Return the VNI assigned to the Overlay
 # If the Overlay has no assigned VNI, return -1
-def get_vni(overlay_name, tenantid):
+def get_vni(overlay_name, tenantid, client=None):
     # Get reference to mongo DB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get overlays collection
@@ -2660,9 +2732,10 @@ def get_vni(overlay_name, tenantid):
 
 
 # Release VNI and mark it as reusable
-def release_vni(overlay_name, tenantid):
+def release_vni(overlay_name, tenantid, client=None):
     # Get reference to mongo DB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get overlays collection
@@ -2701,9 +2774,10 @@ def release_vni(overlay_name, tenantid):
         return -1
 
 
-def get_new_vtep_ip(dev_id, tenantid):
+def get_new_vtep_ip(dev_id, tenantid, client=None):
     # Get the collections
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Devices collection
@@ -2754,9 +2828,10 @@ def get_new_vtep_ip(dev_id, tenantid):
 
 # Return VTEP IP adress assigned to the device
 # If device has no VTEP IP address return -1
-def get_vtep_ip(dev_id, tenantid):
+def get_vtep_ip(dev_id, tenantid, client=None):
     # Get the collections
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Devices collection
@@ -2771,9 +2846,10 @@ def get_vtep_ip(dev_id, tenantid):
 
 
 # Release VTEP IP and mark it as reusable
-def release_vtep_ip(dev_id, tenantid):
+def release_vtep_ip(dev_id, tenantid, client=None):
     # Get the collections
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Devices collection
@@ -2817,18 +2893,19 @@ def release_vtep_ip(dev_id, tenantid):
 
 
 # Return the topology
-def get_topology():
+def get_topology(client=None):
     raise NotImplementedError
 
 
 """ Init database """
 
 
-def init_db():
+def init_db(client=None):
     # Build the query
     query = {'config': 'mgmt_counters'}
     # Get a reference to the MongoDB client
-    client = get_mongodb_session()
+    if client is None:
+            client = get_mongodb_session()
     # Get the database
     db = client.EveryWan
     # Get the configuration collection

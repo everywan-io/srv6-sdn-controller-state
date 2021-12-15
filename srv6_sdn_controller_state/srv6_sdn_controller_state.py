@@ -66,7 +66,7 @@ def get_mongodb_session(host=DEFAULT_MONGODB_HOST,
 
 # Register a device
 def register_device(deviceid, features, interfaces, mgmtip,
-                    tenantid, sid_prefix=None):
+                    tenantid, sid_prefix=None, public_prefix_length=None):
     # Build the document to insert
     device = {
         'deviceid': deviceid,
@@ -92,7 +92,8 @@ def register_device(deviceid, features, interfaces, mgmtip,
         },
         'vtep_ip_addr': None,
         'registration_timestamp': str(datetime.datetime.utcnow()),
-        'sid_prefix': sid_prefix
+        'sid_prefix': sid_prefix,
+        'public_prefix_length': public_prefix_length
     }
     # Register the device
     logging.debug('Registering device on DB: %s' % device)
@@ -748,6 +749,22 @@ def get_sid_prefix(deviceid, tenantid):
     # None if the device does not exist or
     # None if an error occurred during the connection to the db
     return sid_prefix
+
+
+# Get router's public prefix length
+def get_public_prefix_length(deviceid, tenantid):
+    logging.debug('Retrieving public prefix length for device %s' % deviceid)
+    # Get the device
+    device = get_device(deviceid, tenantid)
+    public_prefix_length = None
+    if device is not None:
+        # Get the SID prefix
+        public_prefix_length = device['public_prefix_length']
+        logging.debug('Public prefix prefix: %s' % public_prefix_length)
+    # Return the public prefix length if the device exists,
+    # None if the device does not exist or
+    # None if an error occurred during the connection to the db
+    return public_prefix_length
 
 
 # Get router's management IP address

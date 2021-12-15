@@ -757,6 +757,29 @@ def get_global_ipv6_addresses(deviceid, tenantid, interface_name, client=None):
     return addrs
 
 
+# Get non link-local IPv6 addresses
+def get_non_link_local_ipv6_addresses(deviceid, tenantid, interface_name, client=None):
+    # Find the IPv6 addresses by device ID and interface
+    logging.debug('Retrieving non link-local IPv6 addresses for device %s (tenant %s)'
+                  % (deviceid, tenantid))
+    interface = get_interface(deviceid=deviceid, tenantid=tenantid,
+        interface_name=interface_name, client=client)
+    addrs = None
+    if interface is not None:
+        # Extract the addresses
+        _addrs = interface['ipv6_addrs']
+        addrs = []
+        for addr in _addrs:
+            if not IPv6Interface(addr).is_link_local:
+                addrs.append(addr)
+        logging.debug('Non link-local IPv6 addresses: %s' % addrs)
+    # Return the non link-local IPv6 addresses associated to the
+    # interface if the interface exists,
+    # None if the interface does not exist or
+    # None if an error occurred during the connection to the db
+    return addrs
+
+
 # Get router's SID prefix
 def get_sid_prefix(deviceid, tenantid, client=None):
     logging.debug('Retrieving SID prefix for device %s' % deviceid)
@@ -1908,6 +1931,10 @@ def configure_tenant(tenantid, tenant_info=None, vxlan_port=None, client=None):
             'tableid': {
                 'reusable_tableids': [],
                 'last_allocated_tableid': 0
+            },
+            'ssid': {
+                'reusable_ssid': [],
+                'last_ssid': 0
             }
         }
     }

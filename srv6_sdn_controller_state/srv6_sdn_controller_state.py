@@ -66,7 +66,8 @@ def get_mongodb_session(host=DEFAULT_MONGODB_HOST,
 
 # Register a device
 def register_device(deviceid, features, interfaces, mgmtip,
-                    tenantid, sid_prefix=None, public_prefix_length=None):
+                    tenantid, sid_prefix=None, public_prefix_length=None,
+                    enable_proxy_ndp=True):
     # Build the document to insert
     device = {
         'deviceid': deviceid,
@@ -93,7 +94,8 @@ def register_device(deviceid, features, interfaces, mgmtip,
         'vtep_ip_addr': None,
         'registration_timestamp': str(datetime.datetime.utcnow()),
         'sid_prefix': sid_prefix,
-        'public_prefix_length': public_prefix_length
+        'public_prefix_length': public_prefix_length,
+        'enable_proxy_ndp': enable_proxy_ndp
     }
     # Register the device
     logging.debug('Registering device on DB: %s' % device)
@@ -733,6 +735,25 @@ def get_global_ipv6_addresses(deviceid, tenantid, interface_name):
     # None if the interface does not exist or
     # None if an error occurred during the connection to the db
     return addrs
+
+
+def is_proxy_ndp_enabled(deviceid, tenantid):
+    """
+    Return True if the proxy NDP is enabled on the device, False otherwise.
+    """
+    logging.debug('Retrieving enable_proxy_ndp flag for device %s' % deviceid)
+    # Get the device
+    device = get_device(deviceid, tenantid)
+    is_proxy_ndp_enabled = None
+    if device is not None:
+        # Get the enable_proxy_ndp flag
+        is_proxy_ndp_enabled = device.get('enable_proxy_ndp', False)
+        logging.debug('enable_proxy_ndp: %s' % is_proxy_ndp_enabled)
+    # Return True if the enable_proxy_ndp flag is set,
+    # False if it is not set,
+    # None if the device does not exist or
+    # None if an error occurred during the connection to the db
+    return is_proxy_ndp_enabled
 
 
 # Get router's SID prefix

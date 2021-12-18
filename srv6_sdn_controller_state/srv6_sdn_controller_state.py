@@ -14,7 +14,8 @@ import itertools
 
 # Global variables
 #DEFAULT_MONGODB_HOST = '0.0.0.0'
-DEFAULT_MONGODB_HOST = '160.80.105.253'
+#DEFAULT_MONGODB_HOST = '160.80.105.253'
+DEFAULT_MONGODB_HOST = '2000:0:25:24::2'
 DEFAULT_MONGODB_PORT = 27017
 DEFAULT_MONGODB_USERNAME = 'root'
 DEFAULT_MONGODB_PASSWORD = '12345678'
@@ -731,6 +732,29 @@ def get_global_ipv6_addresses(deviceid, tenantid, interface_name):
                 addrs.append(addr)
         logging.debug('Global IPv6 addresses: %s' % addrs)
     # Return the global IPv6 addresses associated to the
+    # interface if the interface exists,
+    # None if the interface does not exist or
+    # None if an error occurred during the connection to the db
+    return addrs
+
+
+# Get non link-local IPv6 addresses
+def get_non_link_local_ipv6_addresses(deviceid, tenantid, interface_name, client=None):
+    # Find the IPv6 addresses by device ID and interface
+    logging.debug('Retrieving non link-local IPv6 addresses for device %s (tenant %s)'
+                  % (deviceid, tenantid))
+    interface = get_interface(deviceid=deviceid, tenantid=tenantid,
+        interface_name=interface_name)
+    addrs = None
+    if interface is not None:
+        # Extract the addresses
+        _addrs = interface['ipv6_addrs']
+        addrs = []
+        for addr in _addrs:
+            if not IPv6Interface(addr).is_link_local:
+                addrs.append(addr)
+        logging.debug('Non link-local IPv6 addresses: %s' % addrs)
+    # Return the non link-local IPv6 addresses associated to the
     # interface if the interface exists,
     # None if the interface does not exist or
     # None if an error occurred during the connection to the db
@@ -1770,6 +1794,42 @@ def get_overlay_containing_device(deviceid, tenantid):
         logging.error('Cannot establish a connection to the db')
     # Return the overlay
     return overlay
+
+
+# Return all the overlays common to two devices, an empty list if there are
+# not common overlays between the two devices, None if an error occurred
+def get_overlays_containing_devices(deviceid1, deviceid2, tenantid):
+    # Find the overlays
+    logging.debug('Retrieving all the overlays containing device %s and '
+                  'device %s, tenant %s' % (deviceid1, deviceid2, tenantid))
+    overlays_list = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the overlays collection
+        overlays = db.overlays
+        # Find the overlays containing the two devices
+        overlays_list = overlays.aggregate([
+            {
+                "$match": {
+                    'tenantid': tenantid,
+                    'slices.deviceid': deviceid1,
+                }
+            },
+            {
+                "$match": {
+                    'tenantid': tenantid,
+                    'slices.deviceid': deviceid2,
+                }
+            }
+        ])
+        overlays_list = list(overlays_list)
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return the overlays
+    return overlays_list
 
 
 ''' Functions operating on the tenants collection '''

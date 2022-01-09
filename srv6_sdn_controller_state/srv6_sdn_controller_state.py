@@ -76,6 +76,9 @@ def register_device(deviceid, features, interfaces, mgmtip,
         'description': None,
         'features': features,
         'interfaces': interfaces,
+        'default':{
+            'interfaces': interfaces
+        },
         'mgmtip': mgmtip,
         'mgmt_mac': None,
         'tenantid': tenantid,
@@ -1126,6 +1129,49 @@ def dec_and_get_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
     return counter
 
 
+# Reset the counter of a tunnel mode on a device
+def reset_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
+    # Build the query
+    query = {'deviceid': deviceid,
+             'tenantid': tenantid,
+             'stats.counters.tunnels.tunnel_mode': tunnel_name}
+    counter = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the devices collection
+        devices = db.devices
+        # Find the device
+        logging.debug('Getting the device %s (tenant %s)' % (deviceid, tenantid))
+        # Decrease the counter for the tunnel mode
+        device = devices.find_one_and_update(
+            query, {'$set': {'stats.counters.tunnels.$.counter': 0}},
+            return_document=ReturnDocument.AFTER)
+        if device is None:
+            logging.warning('Device not found or tunnel mode counter not found')
+            return None
+        # Return the counter
+        counter = -1
+        for tunnel_mode in device['stats']['counters']['tunnels']:
+            if tunnel_name == tunnel_mode['tunnel_mode']:
+                counter = tunnel_mode['counter']
+        if counter == -1:
+            logging.error('Cannot update counter')
+            return None
+        logging.debug('Counter after the decrement: %s' % counter)
+        # If counter is 0, remove the tunnel mode from the device stats
+        if counter == 0:
+            logging.debug('Counter set to 0, removing tunnel mode')
+            devices.update_one(
+                query, {'$pull': {'stats.counters.tunnels': {'tunnel_mode': tunnel_name}}})
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return the counter if success,
+    # None if an error occurred during the connection to the db
+    return counter
+
 # Return the number of tunnels configured on a device
 def get_num_tunnels(deviceid, tenantid):
     # Build the query
@@ -1251,6 +1297,32 @@ def dec_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
     # Return the counter if success,
     # None if an error occurred during the connection to the db
     return counter
+
+
+# Reset the counter of a tunnels on a overlay
+def reset_overlay_stats(tenantid, deviceid, overlayid=None):
+    # Build the query
+    query = {'tenantid': tenantid,
+             'stats.counters.tunnels.deviceid': deviceid}
+    if overlayid is not None:
+        query['_id'] = ObjectId(overlayid)
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the overlays collection
+        overlays = db.overlays
+        # Find the overlay
+        logging.debug('Removing the overlay stats overlayid %s, deviceid %s (tenant %s)' % (overlayid, deviceid, tenantid))
+        # Remove the overlay stats
+        overlay = overlays.find_one_and_update(
+            query, {'$set': {'stats.counters.tunnels.$.counter': 0}},
+            return_document=ReturnDocument.AFTER)
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return True if success
+    return True
 
 
 # Update device VTEP MAC address
@@ -1830,6 +1902,38 @@ def get_overlays_containing_devices(deviceid1, deviceid2, tenantid):
         logging.error('Cannot establish a connection to the db')
     # Return the overlays
     return overlays_list
+
+
+# Return all the overlays to which the device is partecipating,
+# None the device is not part of any overlay
+def get_overlays_containing_device(deviceid, tenantid):
+    # Build the query
+    query = {
+        'tenantid': tenantid,
+        'slices.deviceid': deviceid
+    }
+    # Find the device
+    logging.debug('Checking if the device %s (tenant %s) '
+                  'is partecipating to some overlay' % (deviceid, tenantid))
+    overlays = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the overlays collection
+        overlays = db.overlays
+        # Find the overlays
+        overlays = list(overlays.find(query))
+        if overlays is not None:
+            logging.debug(
+                'Device is partecipating to the overlays %s' % overlays)
+        else:
+            logging.debug('The device is not partpartecipating to any overlay')
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return the overlay
+    return overlays
 
 
 ''' Functions operating on the tenants collection '''

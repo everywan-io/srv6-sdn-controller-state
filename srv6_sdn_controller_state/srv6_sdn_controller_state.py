@@ -31,6 +31,7 @@ RESERVED_TABLEIDS.append(LOCAL_SID_TABLE)
 RESERVED_VNI = [0, 1]
 # Reserved VTEP IP address
 RESERVED_VTEP_IP = [0, 65536]
+RESERVED_VTEP_IPV6 = [0]
 
 # Set logging level
 logging.basicConfig(level=logging.DEBUG)
@@ -96,6 +97,7 @@ def register_device(deviceid, features, interfaces, mgmtip,
             }
         },
         'vtep_ip_addr': None,
+        'vtep_ipv6_addr': None,
         'registration_timestamp': str(datetime.datetime.utcnow()),
         'sid_prefix': sid_prefix,
         'public_prefix_length': public_prefix_length,
@@ -2050,6 +2052,9 @@ def configure_tenant(tenantid, tenant_info=None, vxlan_port=None):
         'vtep_ip_index': -1,
         'reu_vtep_ip_addr': [],
         'assigned_vtep_ip_addr': 0,
+        'vtep_ipv6_index': -1,
+        'reu_vtep_ipv6_addr': [],
+        'assigned_vtep_ipv6_addr': 0,
         'vni_index': -1,
         'reu_vni': [],
         'assigned_vni': 0,
@@ -2954,6 +2959,57 @@ def get_new_vtep_ip(dev_id, tenantid):
         return vtep_ip
 
 
+def get_new_vtep_ipv6(dev_id, tenantid):
+    # Get the collections
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Devices collection
+    devices = db.devices
+    # Tenants collection
+    tenants = db.tenants
+    # ip address availale
+    ip = IPv6Network('fc00::/64')
+    network_mask = 64
+    # The device of the considered tenant already has an associated VTEP IP
+    if devices.find_one({'deviceid': dev_id, 'tenantid': tenantid}, {'vtep_ipv6_addr': 1})['vtep_ipv6_addr'] != None:
+        return -1
+    # The device does not have a VTEP IP address
+    else:
+        # Check if a reusable VTEP IP is available
+        if not tenants.find_one({'tenantid': tenantid, 'reu_vtep_ipv6_addr': {'$size': 0}}):
+            # Pop VTEP IP adress from the array
+            vtep_ips = tenants.find_one({
+                'tenantid': tenantid})['reu_vtep_ipv6_addr']
+            vtep_ip = vtep_ips.pop()
+            tenants.find_one_and_update({
+                'tenantid': tenantid}, {'$set': {'reu_vtep_ipv6_addr': vtep_ips}})
+        else:
+            # If not, get a VTEP IP address
+            tenants.find_one_and_update({
+                'tenantid': tenantid}, {'$inc': {'vtep_ipv6_index': +1}})
+            while tenants.find_one({'tenantid': tenantid}, {'vtep_ipv6_index': 1})['vtep_ipv6_index'] in RESERVED_VTEP_IPV6:
+                # Skip reserved VTEP IP address
+                tenants.find_one_and_update({
+                    'tenantid': tenantid}, {'$inc': {'vtep_ipv6_index': +1}})
+            # Get IP address
+            ip_index = tenants.find_one({
+                'tenantid': tenantid}, {'vtep_ipv6_index': 1})['vtep_ipv6_index']
+            vtep_ip = "%s/%s" % (ip[ip_index], network_mask)
+        # Assign the VTEP IP address to the device
+        devices.find_one_and_update({
+            'tenantid': tenantid,
+            'deviceid': dev_id}, {
+            '$set': {'vtep_ipv6_addr': vtep_ip}
+        }
+        )
+        # Increase assigned VTEP IP addr counter
+        tenants.find_one_and_update({
+            'tenantid': tenantid}, {'$inc': {'assigned_vtep_ipv6_addr': +1}})
+        # And return
+        return vtep_ip
+
+
 # Return VTEP IP adress assigned to the device
 # If device has no VTEP IP address return -1
 def get_vtep_ip(dev_id, tenantid):
@@ -2966,6 +3022,24 @@ def get_vtep_ip(dev_id, tenantid):
     # Get VTEP IP
     vtep_ip = devices.find_one({
         'deviceid': dev_id, 'tenantid': tenantid}, {'vtep_ip_addr': 1})['vtep_ip_addr']
+    if vtep_ip == None:
+        return -1
+    else:
+        return vtep_ip
+
+
+# Return VTEP IP adress assigned to the device
+# If device has no VTEP IP address return -1
+def get_vtep_ipv6(dev_id, tenantid):
+    # Get the collections
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Devices collection
+    devices = db.devices
+    # Get VTEP IP
+    vtep_ip = devices.find_one({
+        'deviceid': dev_id, 'tenantid': tenantid}, {'vtep_ipv6_addr': 1})['vtep_ipv6_addr']
     if vtep_ip == None:
         return -1
     else:
@@ -3008,6 +3082,49 @@ def release_vtep_ip(dev_id, tenantid):
             # empty reusable address list
             tenants.find_one_and_update({
                 'tenantid': tenantid}, {'$set': {'reu_vtep_ip_addr': []}})
+        # Return the VTEP IP
+        return vtep_ip
+    else:
+        # The device has no associeted VTEP IP
+        return -1
+
+
+# Release VTEP IP and mark it as reusable
+def release_vtep_ipv6(dev_id, tenantid):
+    # Get the collections
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Devices collection
+    devices = db.devices
+    # Tenants collection
+    tenants = db.tenants
+    # Get device VTEP IP address
+    vtep_ip = devices.find_one({
+        'deviceid': dev_id, 'tenantid': tenantid}, {'vtep_ipv6_addr': 1})['vtep_ipv6_addr']
+    # If IP address is valid
+    if vtep_ip != None:
+        # Unassign the VTEP IP addr
+        devices.find_one_and_update({
+            'tenantid': tenantid,
+            'deviceid': dev_id}, {
+            '$set': {'vtep_ipv6_addr': None}
+        }
+        )
+        # Decrease assigned VTEP IP addr counter
+        tenants.find_one_and_update({
+            'tenantid': tenantid}, {'$inc': {'assigned_vtep_ipv6_addr': -1}})
+        # Mark the VTEP IP addr as reusable
+        tenants.update_one({
+            'tenantid': tenantid}, {'$push': {'reu_vtep_ipv6_addr': vtep_ip}})
+        # If all addresses have been released
+        if tenants.find_one({'tenantid': tenantid}, {'assigned_vtep_ipv6_addr': 1})['assigned_vtep_ipv6_addr'] == 0:
+            # reset the counter
+            tenants.find_one_and_update({
+                'tenantid': tenantid}, {'$set': {'vtep_ipv6_index': -1}})
+            # empty reusable address list
+            tenants.find_one_and_update({
+                'tenantid': tenantid}, {'$set': {'reu_vtep_ipv6_addr': []}})
         # Return the VTEP IP
         return vtep_ip
     else:

@@ -101,7 +101,8 @@ def register_device(deviceid, features, interfaces, mgmtip,
         'registration_timestamp': str(datetime.datetime.utcnow()),
         'sid_prefix': sid_prefix,
         'public_prefix_length': public_prefix_length,
-        'enable_proxy_ndp': enable_proxy_ndp
+        'enable_proxy_ndp': enable_proxy_ndp,
+        'reconciliation_required': False
     }
     # Register the device
     logging.debug('Registering device on DB: %s' % device)
@@ -1042,6 +1043,59 @@ def set_device_connected_flag(deviceid, tenantid, connected):
     return success
 
 
+# Device require reconciliation
+def set_device_reconciliation_flag(deviceid, tenantid, flag=True):
+    # Build the query
+    query = {'deviceid': deviceid, 'tenantid': tenantid}
+    # Build the update
+    update = {'$set': {'reconciliation_required': flag}}
+    success = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the devices collection
+        devices = db.devices
+        # Change 'reconciliation' flag
+        logging.debug('Change reconciliation flag for device %s' % deviceid)
+        success = devices.update_one(query, update).matched_count == 1
+        if not success:
+            logging.error('Cannot change reconciliation flag: device not found')
+        else:
+            logging.debug('Reconciliation flag updated successfully')
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return True if success,
+    # False otherwise
+    return success
+
+
+# Get device reconciliation flag
+def get_device_reconciliation_flag(deviceid, tenantid):
+    # Build the query
+    query = {'deviceid': deviceid, 'tenantid': tenantid}
+    # Find the device
+    logging.debug('Retrieving device reconciliation flag %s' % deviceid)
+    flag = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the devices collection
+        devices = db.devices
+        # Find the devices
+        device = devices.find_one(query)
+        # Get the flag
+        flag = device['reconciliation_required']
+        logging.debug('Device reconciliation flag: %s' % flag)
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return the flag
+    return flag
+
+
 # Get the counter of a tunnel mode on a device and
 # increase the counter
 def get_and_inc_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
@@ -1936,6 +1990,37 @@ def get_overlays_containing_device(deviceid, tenantid):
         logging.error('Cannot establish a connection to the db')
     # Return the overlay
     return overlays
+
+
+def reset_created_tunnels(tenantid, deviceid):
+    # Build the query
+    query = {'tenantid': tenantid}
+    counter = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the overlays collection
+        overlays = db.overlays
+        _overlays = overlays.find(query)
+        for overlay in _overlays:
+            created_tunnels = overlay['created_tunnel']
+            _created_tunnels = list(overlay['created_tunnel'])
+            for idx in range(len(created_tunnels)):
+                if created_tunnels[idx]['tunnel_key'].startswith(deviceid):
+                    del _created_tunnels[idx]
+            # Reset the counter
+            query = {'_id': overlay['_id'],
+                     'tenantid': tenantid}
+            overlays.update_one(
+                    query, {'$set': {'created_tunnel': _created_tunnels}})
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return the counter if success,
+    # None if an error occurred during the connection to the db
+    return counter
+    
 
 
 ''' Functions operating on the tenants collection '''

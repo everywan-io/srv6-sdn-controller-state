@@ -2005,7 +2005,9 @@ def reset_created_tunnels(tenantid, deviceid):
         overlays = db.overlays
         _overlays = overlays.find(query)
         for overlay in _overlays:
-            created_tunnels = overlay['created_tunnel']
+            created_tunnels = overlay.get('created_tunnel', None)
+            if created_tunnels is None:
+                continue
             _created_tunnels = list(overlay['created_tunnel'])
             for idx in range(len(created_tunnels)):
                 if created_tunnels[idx]['tunnel_key'].startswith(deviceid):

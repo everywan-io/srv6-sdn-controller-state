@@ -1507,7 +1507,7 @@ def set_tunnel_mode(deviceid, tenantid, tunnel_mode):
 
 
 # Create overlay
-def create_overlay(name, type, slices, tenantid, tunnel_mode):
+def create_overlay(name, type, slices, tenantid, tunnel_mode, transport_proto='ipv6'):
     # Build the document
     overlay = {
         'name': name,
@@ -1515,7 +1515,8 @@ def create_overlay(name, type, slices, tenantid, tunnel_mode):
         'type': type,
         'slices': slices,
         'tunnel_mode': tunnel_mode,
-        'vni': None
+        'vni': None,
+        'transport_proto': transport_proto
     }
     overlayid = None
     try:

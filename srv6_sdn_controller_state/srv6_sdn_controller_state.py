@@ -71,7 +71,7 @@ def get_mongodb_session(host=DEFAULT_MONGODB_HOST,
 # Register a device
 def register_device(deviceid, features, interfaces, mgmtip,
                     tenantid, sid_prefix=None, public_prefix_length=None,
-                    enable_proxy_ndp=True):
+                    enable_proxy_ndp=True, force_ip6tnl=False, force_srh=False):
     # Build the document to insert
     device = {
         'deviceid': deviceid,
@@ -104,6 +104,8 @@ def register_device(deviceid, features, interfaces, mgmtip,
         'sid_prefix': sid_prefix,
         'public_prefix_length': public_prefix_length,
         'enable_proxy_ndp': enable_proxy_ndp,
+        'force_ip6tnl': force_ip6tnl,
+        'force_srh': force_srh,
         'reconciliation_required': False
     }
     # Register the device

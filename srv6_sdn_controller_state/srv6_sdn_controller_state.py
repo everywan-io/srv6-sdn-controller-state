@@ -32,6 +32,8 @@ RESERVED_VNI = [0, 1]
 # Reserved VTEP IP address
 RESERVED_VTEP_IP = [0, 65536]
 RESERVED_VTEP_IPV6 = [0]
+# Reserved Tunnel Indices
+RESERVED_TUNNELID = []
 
 # Set logging level
 logging.basicConfig(level=logging.DEBUG)
@@ -1516,7 +1518,11 @@ def create_overlay(name, type, slices, tenantid, tunnel_mode, transport_proto='i
         'slices': slices,
         'tunnel_mode': tunnel_mode,
         'vni': None,
-        'transport_proto': transport_proto
+        'transport_proto': transport_proto,
+        'counters': {
+            'reusable_tunnelid': [],
+            'last_tunnelid': -1
+        }
     }
     overlayid = None
     try:
@@ -3217,6 +3223,124 @@ def release_vtep_ipv6(dev_id, tenantid):
         return vtep_ip
     else:
         # The device has no associeted VTEP IP
+        return -1
+
+
+def add_tunnel_to_overlay(overlayid, ldeviceid, rdeviceid, tenantid):
+    # Get the collections
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Overlays collection
+    overlays = db.overlays
+    # Check if a reusable tunnel ID is available
+    if not overlays.find_one({'_id': ObjectId(overlayid), 'tenantid': tenantid, 'counters.reusable_tunnelid': {'$size': 0}}):
+        # Pop tunnel ID from the array
+        tunnelid_array = overlays.find_one({
+            '_id': ObjectId(overlayid), 'tenantid': tenantid})['counters']['reusable_tunnelid']
+        tunnelid = iptunnelid_array.pop()
+        overlays.find_one_and_update({
+            '_id': ObjectId(overlayid), 'tenantid': tenantid}, {'$set': {'counters.reusable_tunnelid': tunnelid_array}})
+    else:
+        # If not, get a tunnel ID
+        overlays.find_one_and_update({
+            '_id': ObjectId(overlayid), 'tenantid': tenantid}, {'$inc': {'counters.last_tunnelid': +1}})
+        while overlays.find_one({'_id': ObjectId(overlayid), 'tenantid': tenantid}, {'counters.last_tunnelid': 1})['counters']['last_tunnelid'] in RESERVED_TUNNELID:
+            # Skip reserved tunnel IDs
+            overlays.find_one_and_update({
+                '_id': ObjectId(overlayid), 'tenantid': tenantid}, {'$inc': {'counters.last_tunnelid': +1}})
+        # Get tunnel ID
+        tunnelid = overlays.find_one({
+            '_id': ObjectId(overlayid), 'tenantid': tenantid}, {'counters.last_tunnelid': 1})['counters']['last_tunnelid']
+    tunnel_name = 'tnl' + str(tunnelid)
+    new_tunnel = {
+        'tunnelid': tunnelid,
+        'ldeviceid': ldeviceid,
+        'rdeviceid': rdeviceid,
+        'tunnel_name': tunnel_name
+    }
+    # Assign the VTEP IP address to the device
+    overlays.find_one_and_update({
+        'tenantid': tenantid,
+        '_id': ObjectId(overlayid)},
+        {'$push': {'tunnels': new_tunnel}}
+    )
+    # And return
+    return new_tunnel
+
+
+def get_tunnel(overlayid, ldeviceid, rdeviceid, tenantid):
+    # Build the query
+    query = {'tenantid': tenantid, '_id': ObjectId(overlayid)}
+    # Get a reference to the MongoDB client
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Get the overlays collection
+    overlays = db.overlays
+    # Get the tunnel
+    logging.debug('Get tunnel for the overlay %s (%s)' % (overlayid, tenantid))
+    tunnel = None
+    try:
+        # Get the overlay
+        overlay = overlays.find_one(query)
+        # Get the table ID assigned to the overlay
+        tunnels = overlay.get('tunnels')
+        if tunnels is None:
+            logging.error('No tunnels array available for the overlay')
+        else:
+            for _tunnel in tunnels:
+                if _tunnel['ldeviceid'] == ldeviceid and _tunnel['rdeviceid'] == rdeviceid:
+                    tunnel = _tunnel
+                    break
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return the tunnel or None if error
+    return tunnel
+
+
+# Release tunnel ID and mark it as reusable
+def remove_tunnel_from_overlay(overlayid, ldeviceid, rdeviceid, tenantid):
+    # Get the collections
+    client = get_mongodb_session()
+    # Get the database
+    db = client.EveryWan
+    # Overlays collection
+    overlays = db.overlays
+    # Get tunnel ID
+    tunnel = get_tunnel(overlayid, ldeviceid, rdeviceid, tenantid)
+    # If tunnel is valid
+    if tunnel is not None:
+        tunnelid = tunnel['tunnelid']
+        # Get the overlay
+        overlay = overlays.find_one({
+            'tenantid': tenantid,
+            '_id': ObjectId(overlayid)}
+        )
+        # Remove the tunnel from the overlay
+        tunnels = overlay['tunnels']
+        for i in range(len(tunnels)):
+            _tunnel = tunnels[i]
+            if _tunnel['ldeviceid'] == ldeviceid and _tunnel['rdeviceid'] == rdeviceid:
+                tunnel = _tunnel
+                break
+        if tunnel is None:
+            logging.error('Tunnel not found')
+            return None
+        del tunnels[i]
+        overlays.find_one_and_update({
+            'tenantid': tenantid,
+            '_id': ObjectId(overlayid)}, {
+            '$set': {'tunnels': tunnels}
+        })
+        # Mark the tunnel ID as reusable
+        overlays.update_one({
+            '_id': ObjectId(overlayid), 'tenantid': tenantid}, {'$push': {'counters.reusable_tunnelid': tunnelid}})
+        # Return the tunnel
+        return tunnel
+    else:
+        # The tunnel does not exist
+        logging.error('Tunnel not found')
         return -1
 
 

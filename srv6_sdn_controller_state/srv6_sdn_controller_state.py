@@ -790,6 +790,46 @@ def is_proxy_ndp_enabled(deviceid, tenantid):
     return is_proxy_ndp_enabled
 
 
+def is_ip6tnl_forced(deviceid, tenantid):
+    """
+    Return True if the force_ip6tnl parameter is set for the device, False
+    otherwise.
+    """
+    logging.debug('Retrieving force_ip6tnl flag for device %s' % deviceid)
+    # Get the device
+    device = get_device(deviceid, tenantid)
+    is_ip6tnl_forced = None
+    if device is not None:
+        # Get the force_ip6tnl flag
+        is_ip6tnl_forced = device.get('force_ip6tnl', False)
+        logging.debug('force_ip6tnl: %s' % is_proxy_ndp_enabled)
+    # Return True if the force_ip6tnl flag is set,
+    # False if it is not set,
+    # None if the device does not exist or
+    # None if an error occurred during the connection to the db
+    return is_ip6tnl_forced
+
+
+def is_srh_forced(deviceid, tenantid):
+    """
+    Return True if the force_srh parameter is set for the device, False
+    otherwise.
+    """
+    logging.debug('Retrieving force_srh flag for device %s' % deviceid)
+    # Get the device
+    device = get_device(deviceid, tenantid)
+    is_srh_forced = None
+    if device is not None:
+        # Get the force_srh flag
+        is_srh_forced = device.get('force_srh', False)
+        logging.debug('force_srh: %s' % is_proxy_ndp_enabled)
+    # Return True if the force_srh flag is set,
+    # False if it is not set,
+    # None if the device does not exist or
+    # None if an error occurred during the connection to the db
+    return is_srh_forced
+
+
 # Get router's SID prefix
 def get_sid_prefix(deviceid, tenantid):
     logging.debug('Retrieving SID prefix for device %s' % deviceid)

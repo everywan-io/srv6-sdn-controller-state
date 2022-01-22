@@ -71,7 +71,9 @@ def get_mongodb_session(host=DEFAULT_MONGODB_HOST,
 # Register a device
 def register_device(deviceid, features, interfaces, mgmtip,
                     tenantid, sid_prefix=None, public_prefix_length=None,
-                    enable_proxy_ndp=True, force_ip6tnl=False, force_srh=False):
+                    enable_proxy_ndp=True, force_ip6tnl=False, force_srh=False,
+                    incoming_sr_transparency=None,
+                    outgoing_sr_transparency=None):
     # Build the document to insert
     device = {
         'deviceid': deviceid,
@@ -106,6 +108,8 @@ def register_device(deviceid, features, interfaces, mgmtip,
         'enable_proxy_ndp': enable_proxy_ndp,
         'force_ip6tnl': force_ip6tnl,
         'force_srh': force_srh,
+        'incoming_sr_transparency': incoming_sr_transparency,
+        'outgoing_sr_transparency': outgoing_sr_transparency,
         'reconciliation_required': False
     }
     # Register the device
@@ -828,6 +832,44 @@ def is_srh_forced(deviceid, tenantid):
     # None if the device does not exist or
     # None if an error occurred during the connection to the db
     return is_srh_forced
+
+
+def get_incoming_sr_transparency(deviceid, tenantid):
+    """
+    Return the incoming Segment Routing Transparency.
+    """
+    logging.debug('Retrieving incoming_sr_transparency for device %s'
+                  % deviceid)
+    # Get the device
+    device = get_device(deviceid, tenantid)
+    incoming_sr_transparency = None
+    if device is not None:
+        # Get the force_srh flag
+        incoming_sr_transparency = device.get('incoming_sr_transparency', None)
+        logging.debug('incoming_sr_transparency: %s' % incoming_sr_transparency)
+    # Return the incoming Segment Routing Transparency,
+    # None if the device does not exist or
+    # None if an error occurred during the connection to the db
+    return incoming_sr_transparency
+
+
+def get_outgoing_sr_transparency(deviceid, tenantid):
+    """
+    Return the outgoing Segment Routing Transparency.
+    """
+    logging.debug('Retrieving outgoing_sr_transparency for device %s'
+                  % deviceid)
+    # Get the device
+    device = get_device(deviceid, tenantid)
+    outgoing_sr_transparency = None
+    if device is not None:
+        # Get the force_srh flag
+        outgoing_sr_transparency = device.get('outgoing_sr_transparency', None)
+        logging.debug('outgoing_sr_transparency: %s' % outgoing_sr_transparency)
+    # Return the outgoing Segment Routing Transparency,
+    # None if the device does not exist or
+    # None if an error occurred during the connection to the db
+    return outgoing_sr_transparency
 
 
 # Get router's SID prefix

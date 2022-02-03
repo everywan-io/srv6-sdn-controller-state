@@ -2241,6 +2241,10 @@ def configure_tenant(tenantid, tenant_info=None, vxlan_port=None):
             'tableid': {
                 'reusable_tableids': [],
                 'last_allocated_tableid': 0
+            },
+            'ssid': {
+                'reusable_ssid': [],
+                'last_ssid': 0
             }
         }
     }

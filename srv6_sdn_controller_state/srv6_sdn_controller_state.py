@@ -4,6 +4,7 @@
 from bson.objectid import ObjectId
 import os
 import pymongo
+from enum import Enum
 from pymongo import ReturnDocument
 import datetime
 import logging
@@ -41,6 +42,20 @@ logging.basicConfig(level=logging.DEBUG)
 
 # MongoDB client
 client = None
+
+
+
+class DeviceState(Enum):
+    UNKNOWN = 0
+    WORKING = 1
+    REBOOT_REQUIRED = 2
+    ADMIN_DISABLED = 3
+    REBOOTING = 4
+    FAILURE = 5
+
+    @classmethod
+    def has_value(cls, value):
+        return value in cls._value2member_map_ 
 
 
 # Get a reference to the MongoDB client
@@ -113,7 +128,8 @@ def register_device(deviceid, features, interfaces, mgmtip,
         'incoming_sr_transparency': incoming_sr_transparency,
         'outgoing_sr_transparency': outgoing_sr_transparency,
         'reconciliation_required': False,
-        'allow_reboot': False  # TODO read from device config file
+        'allow_reboot': False,  # TODO read from device config file
+        'state': DeviceState.UNKNOWN.value
     }
     # Register the device
     logging.debug('Registering device on DB: %s' % device)
@@ -1068,6 +1084,37 @@ def configure_devices(devices):
     return res
 
 
+# Change the state of a device
+def change_device_state(deviceid, tenantid, new_state):
+    # Build the query
+    query = {'deviceid': deviceid, 'tenantid': tenantid}
+    if not DeviceState.has_value(new_state.value):
+        logging.error('Cannot change device state: invalid state %d', new_state.value)
+        return False
+    # Build the update
+    update = {'$set': {'state': new_state.value}}
+    success = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the devices collection
+        devices = db.devices
+        # Change 'enabled' flag
+        logging.debug('Change state for device %s' % deviceid)
+        success = devices.update_one(query, update).matched_count == 1
+        if not success:
+            logging.error('Cannot change state: device not found')
+        else:
+            logging.debug('State updated successfully')
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return True if success,
+    # False otherwise
+    return success
+
+
 # Enable or disable a device
 def set_device_enabled_flag(deviceid, tenantid, enabled):
     # Build the query
@@ -1316,7 +1363,7 @@ def reset_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
             return_document=ReturnDocument.AFTER)
         if device is None:
             logging.warning('Device not found or tunnel mode counter not found')
-            return None
+            return 0
         # Return the counter
         counter = -1
         for tunnel_mode in device['stats']['counters']['tunnels']:
@@ -3488,7 +3535,7 @@ def inc_and_get_reconciliation_failures(tenantid, deviceid):
 
 # Reset the counter of reconciliation failures for a device
 def reset_reconciliation_failures(tenantid, deviceid):
-    res = None
+    success = None
     try:
         # Get a reference to the MongoDB client
         client = get_mongodb_session()
@@ -3505,8 +3552,8 @@ def reset_reconciliation_failures(tenantid, deviceid):
         # Build the update
         update = {'$set': {'stats.counters.reconciliation_failures': 0}}
         # Reset the tunnels counter for the device
-        res = devices.update_one(query, update).matched_count == 1
-        if res:
+        success = devices.update_one(query, update).matched_count == 1
+        if success:
             logging.debug('Reset reconciliation failures successful')
             if success is not False:
                 success = True
@@ -3517,7 +3564,7 @@ def reset_reconciliation_failures(tenantid, deviceid):
         logging.error('Cannot establish a connection to the db')
     # Return the counter if success,
     # None if an error occurred during the connection to the db
-    return res
+    return success
 
 
 """ Topology """

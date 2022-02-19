@@ -98,7 +98,8 @@ def register_device(deviceid, features, interfaces, mgmtip,
         'enabled': False,
         'stats': {
             'counters': {
-                'tunnels': []
+                'tunnels': [],
+                'reconciliation_failures': 0
             }
         },
         'vtep_ip_addr': None,
@@ -3431,6 +3432,37 @@ def remove_tunnel_from_overlay(overlayid, ldeviceid, rdeviceid, tenantid):
         # The tunnel does not exist
         logging.error('Tunnel not found')
         return -1
+
+
+# Get the counter of reconciliation failures for a device and increase the counter
+def inc_and_get_reconciliation_failures(tenantid, deviceid):
+    counter = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the devices collection
+        devices = db.devices
+        # Find the device
+        logging.debug('Getting the device %s (tenant %s)'
+                      % (deviceid, tenantid))
+        # Build query
+        query = {'deviceid': deviceid,
+                 'tenantid': tenantid}
+        # Build the update
+        update = {'$inc': {'stats.counters.reconciliation_failures': 1}}
+        # Increase the tunnels counter for the device
+        device = devices.find_one_and_update(
+            query, update)
+        # Return the counter
+        counter = device['stats']['counters']['reconciliation_failures']
+        logging.debug('Counter before the increment: %s' % counter)
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return the counter if success,
+    # None if an error occurred during the connection to the db
+    return counter
 
 
 """ Topology """

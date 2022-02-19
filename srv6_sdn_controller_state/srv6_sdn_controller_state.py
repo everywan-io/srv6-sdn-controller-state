@@ -112,7 +112,8 @@ def register_device(deviceid, features, interfaces, mgmtip,
         'force_srh': force_srh,
         'incoming_sr_transparency': incoming_sr_transparency,
         'outgoing_sr_transparency': outgoing_sr_transparency,
-        'reconciliation_required': False
+        'reconciliation_required': False,
+        'allow_reboot': False  # TODO read from device config file
     }
     # Register the device
     logging.debug('Registering device on DB: %s' % device)
@@ -445,6 +446,26 @@ def is_device_connected(deviceid, tenantid):
             logging.debug('The device is not connected')
     # Return True if the device is connected,
     # False if it is not connected or
+    # None if an error occurred during the connection to the db
+    return res
+
+
+# Return True if a device can be rebooted, False otherwise
+def can_reboot_device(deviceid, tenantid):
+    # Get the device
+    logging.debug('Searching the device %s (tenant %s)'
+                  % (deviceid, tenantid))
+    device = get_device(deviceid, tenantid)
+    res = None
+    if device is not None:
+        # Get the status of the device
+        res = device.get('allow_reboot', False)
+        if res:
+            logging.debug('The device can be rebooted')
+        else:
+            logging.debug('The device cannot be rebooted')
+    # Return True if the device is enabled,
+    # False if it is not enabled or
     # None if an error occurred during the connection to the db
     return res
 

@@ -101,6 +101,7 @@ def register_device(deviceid, features, interfaces, mgmtip,
             'interfaces': interfaces
         },
         'mgmtip': mgmtip,
+        'mgmtip_orig': mgmtip,
         'mgmt_mac': None,
         'tenantid': tenantid,
         'tunnel_mode': None,
@@ -252,6 +253,63 @@ def update_mgmt_info(deviceid, tenantid, mgmtip, interfaces, tunnel_mode, nat_ty
             '$set': {
                 'interfaces.$.ext_ipv4_addrs': interface['ext_ipv4_addrs'],
                 'interfaces.$.ext_ipv6_addrs': interface['ext_ipv6_addrs']
+            }
+        })
+    success = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the devices collection
+        devices = db.devices
+        # Update the device
+        for q, u in zip(query, update):
+            logging.debug('Updating interface %s on DB' % q)
+            res = devices.update_one(q, u).matched_count == 1
+            if res:
+                logging.debug('Interface successfully updated')
+                if success is not False:
+                    success = True
+            else:
+                logging.error('Cannot update interface')
+                success = False
+        if success:
+            logging.debug('Device successfully updated')
+        else:
+            logging.error('Cannot update device')
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return True if success,
+    # False in case of failure or
+    # None if an error occurred during the connection to the db
+    return success
+
+
+# Clear management information
+def clear_mgmt_info(deviceid, tenantid):
+    # Build the query
+    query = [{'deviceid': deviceid, 'tenantid': tenantid}]
+    for interface in interfaces:
+        query.append({'deviceid': deviceid,
+                      'tenantid': tenantid, 'interfaces.name': interface})
+    device = get_device(deviceid, tenantid)
+    mgmtip_orig = device['mgmtip_orig']
+    # Build the update
+    update = [{
+        '$set': {'mgmtip': mgmtip,
+                 'tunnel_mode': None,
+                 'nat_type': None,
+                 'external_ip': None,
+                 'external_port': None,
+                 'mgmt_mac': None,
+                 'vxlan_port': None}
+    }]
+    for interface in interfaces.values():
+        update.append({
+            '$set': {
+                'interfaces.$.ext_ipv4_addrs': [],
+                'interfaces.$.ext_ipv6_addrs': []
             }
         })
     success = None

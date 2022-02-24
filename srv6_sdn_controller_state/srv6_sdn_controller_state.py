@@ -290,14 +290,15 @@ def update_mgmt_info(deviceid, tenantid, mgmtip, interfaces, tunnel_mode, nat_ty
 def clear_mgmt_info(deviceid, tenantid):
     # Build the query
     query = [{'deviceid': deviceid, 'tenantid': tenantid}]
+    interfaces = get_interfaces(deviceid, tenantid)
     for interface in interfaces:
         query.append({'deviceid': deviceid,
-                      'tenantid': tenantid, 'interfaces.name': interface})
+                      'tenantid': tenantid, 'interfaces.name': interface['name']})
     device = get_device(deviceid, tenantid)
     mgmtip_orig = device['mgmtip_orig']
     # Build the update
     update = [{
-        '$set': {'mgmtip': mgmtip,
+        '$set': {'mgmtip': mgmtip_orig,
                  'tunnel_mode': None,
                  'nat_type': None,
                  'external_ip': None,
@@ -305,7 +306,7 @@ def clear_mgmt_info(deviceid, tenantid):
                  'mgmt_mac': None,
                  'vxlan_port': None}
     }]
-    for interface in interfaces.values():
+    for interface in interfaces:
         update.append({
             '$set': {
                 'interfaces.$.ext_ipv4_addrs': [],

@@ -647,8 +647,8 @@ def get_interface(deviceid, tenantid, interface_name):
         # Get the devices collection
         devices = db.devices
         # Find the interface
-        interfaces = devices.find_one(query, filter)['interfaces']
-        if len(interfaces) == 0:
+        interfaces = devices.find_one(query, filter).get('interfaces')
+        if interfaces is None or len(interfaces) == 0:
             # Interface not found
             logging.debug('Interface not found')
         else:
@@ -3353,7 +3353,9 @@ def release_ipv4_net(deviceid, tenantid):
                     mgmt_counters['mgmt_subnet_ipv4']['reusable_subnets']
                 )
                 # Add the mgmt IPv4 to the reusable nets list
-                reusable_nets.append(IPv4Interface(mgmtip + '/30').network)
+                reusable_nets.append(
+                    str(IPv4Interface(mgmtip + '/30').network)
+                )
                 update = {
                     '$set': {
                         'mgmt_subnet_ipv4.reusable_nets': reusable_nets

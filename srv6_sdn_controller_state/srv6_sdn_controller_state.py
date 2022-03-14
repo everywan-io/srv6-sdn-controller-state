@@ -15,8 +15,8 @@ import itertools
 
 
 # Global variables
-#DEFAULT_MONGODB_HOST = '0.0.0.0'
-#DEFAULT_MONGODB_HOST = '160.80.105.253'
+# DEFAULT_MONGODB_HOST = '0.0.0.0'
+# DEFAULT_MONGODB_HOST = '160.80.105.253'
 DEFAULT_MONGODB_HOST = os.environ.get('MONGODB_HOST', '2000:0:25:24::2')
 DEFAULT_MONGODB_PORT = int(os.environ.get('MONGODB_PORT', 27017))
 DEFAULT_MONGODB_USERNAME = os.environ.get('MONGODB_USERNAME', 'root')
@@ -44,7 +44,6 @@ logging.basicConfig(level=logging.DEBUG)
 client = None
 
 
-
 class DeviceState(Enum):
     UNKNOWN = 0
     WORKING = 1
@@ -55,29 +54,34 @@ class DeviceState(Enum):
 
     @classmethod
     def has_value(cls, value):
-        return value in cls._value2member_map_ 
+        return value in cls._value2member_map_
 
 
 # Get a reference to the MongoDB client
-def get_mongodb_session(host=DEFAULT_MONGODB_HOST,
-                        port=DEFAULT_MONGODB_PORT,
-                        username=DEFAULT_MONGODB_USERNAME,
-                        password=DEFAULT_MONGODB_PASSWORD):
+def get_mongodb_session(
+    host=DEFAULT_MONGODB_HOST,
+    port=DEFAULT_MONGODB_PORT,
+    username=DEFAULT_MONGODB_USERNAME,
+    password=DEFAULT_MONGODB_PASSWORD
+):
     global client
     # Percent-escape username
     username = urllib.parse.quote_plus(username)
     # Percent-escape password
     password = urllib.parse.quote_plus(password)
     # Return the MogoDB client
-    logging.debug('Trying to establish a connection '
-                  'to the db (%s:%s)' % (host, port))
+    logging.debug(
+        'Trying to establish a connection to the db (%s:%s)', host, port
+    )
     # Adjust IP address representation
     host = '[%s]' % host
     if client is None:
-        client = pymongo.MongoClient(host=host,
-                                     port=port,
-                                     username=username,
-                                     password=password)
+        client = pymongo.MongoClient(
+            host=host,
+            port=port,
+            username=username,
+            password=password
+        )
     return client
 
 
@@ -85,11 +89,20 @@ def get_mongodb_session(host=DEFAULT_MONGODB_HOST,
 
 
 # Register a device
-def register_device(deviceid, features, interfaces, mgmtip,
-                    tenantid, sid_prefix=None, public_prefix_length=None,
-                    enable_proxy_ndp=True, force_ip6tnl=False, force_srh=False,
-                    incoming_sr_transparency=None,
-                    outgoing_sr_transparency=None):
+def register_device(
+    deviceid,
+    features,
+    interfaces,
+    mgmtip,
+    tenantid,
+    sid_prefix=None,
+    public_prefix_length=None,
+    enable_proxy_ndp=True,
+    force_ip6tnl=False,
+    force_srh=False,
+    incoming_sr_transparency=None,
+    outgoing_sr_transparency=None
+):
     # Build the document to insert
     device = {
         'deviceid': deviceid,
@@ -97,7 +110,7 @@ def register_device(deviceid, features, interfaces, mgmtip,
         'description': None,
         'features': features,
         'interfaces': interfaces,
-        'default':{
+        'default': {
             'interfaces': interfaces
         },
         'mgmtip': mgmtip,
@@ -159,8 +172,7 @@ def unregister_device(deviceid, tenantid):
     # Build the document to insert
     device = {'deviceid': deviceid, 'tenantid': tenantid}
     # Unregister the device
-    logging.debug('Unregistering device: %s (tenant %s)'
-                  % (deviceid, tenantid))
+    logging.debug('Unregistering device: %s (tenant %s)', deviceid, tenantid)
     success = None
     try:
         # Get a reference to the MongoDB client
@@ -186,7 +198,7 @@ def unregister_devices_by_tenantid(tenantid):
     # Build the filter
     device = {'tenantid': tenantid}
     # Delete all the devices in the collection
-    logging.debug('Unregistering all the devices of the tenant %s' % tenantid)
+    logging.debug('Unregistering all the devices of the tenant %s', tenantid)
     success = None
     try:
         # Get a reference to the MongoDB client
@@ -230,31 +242,51 @@ def unregister_all_devices():
 
 
 # Update management information
-def update_mgmt_info(deviceid, tenantid, mgmtip, interfaces, tunnel_mode, nat_type,
-                     device_external_ip, device_external_port,
-                     device_vtep_mac, vxlan_port):
+def update_mgmt_info(
+    deviceid,
+    tenantid,
+    mgmtip,
+    interfaces,
+    tunnel_mode,
+    nat_type,
+    device_external_ip,
+    device_external_port,
+    device_vtep_mac,
+    vxlan_port
+):
     # Build the query
     query = [{'deviceid': deviceid, 'tenantid': tenantid}]
     for interface in interfaces:
-        query.append({'deviceid': deviceid,
-                      'tenantid': tenantid, 'interfaces.name': interface})
-    # Build the update
-    update = [{
-        '$set': {'mgmtip': mgmtip,
-                 'tunnel_mode': tunnel_mode,
-                 'nat_type': nat_type,
-                 'external_ip': device_external_ip,
-                 'external_port': device_external_port,
-                 'mgmt_mac': device_vtep_mac,
-                 'vxlan_port': vxlan_port}
-    }]
-    for interface in interfaces.values():
-        update.append({
-            '$set': {
-                'interfaces.$.ext_ipv4_addrs': interface['ext_ipv4_addrs'],
-                'interfaces.$.ext_ipv6_addrs': interface['ext_ipv6_addrs']
+        query.append(
+            {
+                'deviceid': deviceid,
+                'tenantid': tenantid,
+                'interfaces.name': interface
             }
-        })
+        )
+    # Build the update
+    update = [
+        {
+            '$set': {
+                'mgmtip': mgmtip,
+                'tunnel_mode': tunnel_mode,
+                'nat_type': nat_type,
+                'external_ip': device_external_ip,
+                'external_port': device_external_port,
+                'mgmt_mac': device_vtep_mac,
+                'vxlan_port': vxlan_port
+            }
+        }
+    ]
+    for interface in interfaces.values():
+        update.append(
+            {
+                '$set': {
+                    'interfaces.$.ext_ipv4_addrs': interface['ext_ipv4_addrs'],
+                    'interfaces.$.ext_ipv6_addrs': interface['ext_ipv6_addrs']
+                }
+            }
+        )
     success = None
     try:
         # Get a reference to the MongoDB client
@@ -265,7 +297,7 @@ def update_mgmt_info(deviceid, tenantid, mgmtip, interfaces, tunnel_mode, nat_ty
         devices = db.devices
         # Update the device
         for q, u in zip(query, update):
-            logging.debug('Updating interface %s on DB' % q)
+            logging.debug('Updating interface %s on DB', q)
             res = devices.update_one(q, u).matched_count == 1
             if res:
                 logging.debug('Interface successfully updated')
@@ -292,27 +324,38 @@ def clear_mgmt_info(deviceid, tenantid):
     query = [{'deviceid': deviceid, 'tenantid': tenantid}]
     interfaces = get_interfaces(deviceid, tenantid)
     for interface in interfaces:
-        query.append({'deviceid': deviceid,
-                      'tenantid': tenantid, 'interfaces.name': interface['name']})
+        query.append(
+            {
+                'deviceid': deviceid,
+                'tenantid': tenantid,
+                'interfaces.name': interface['name']
+            }
+        )
     device = get_device(deviceid, tenantid)
     mgmtip_orig = device['mgmtip_orig']
     # Build the update
-    update = [{
-        '$set': {'mgmtip': mgmtip_orig,
-                 'tunnel_mode': None,
-                 'nat_type': None,
-                 'external_ip': None,
-                 'external_port': None,
-                 'mgmt_mac': None,
-                 'vxlan_port': None}
-    }]
-    for interface in interfaces:
-        update.append({
+    update = [
+        {
             '$set': {
-                'interfaces.$.ext_ipv4_addrs': [],
-                'interfaces.$.ext_ipv6_addrs': []
+                'mgmtip': mgmtip_orig,
+                'tunnel_mode': None,
+                'nat_type': None,
+                'external_ip': None,
+                'external_port': None,
+                'mgmt_mac': None,
+                'vxlan_port': None
             }
-        })
+        }
+    ]
+    for interface in interfaces:
+        update.append(
+            {
+                '$set': {
+                    'interfaces.$.ext_ipv4_addrs': [],
+                    'interfaces.$.ext_ipv6_addrs': []
+                }
+            }
+        )
     success = None
     try:
         # Get a reference to the MongoDB client
@@ -323,7 +366,7 @@ def clear_mgmt_info(deviceid, tenantid):
         devices = db.devices
         # Update the device
         for q, u in zip(query, update):
-            logging.debug('Updating interface %s on DB' % q)
+            logging.debug('Updating interface %s on DB', q)
             res = devices.update_one(q, u).matched_count == 1
             if res:
                 logging.debug('Interface successfully updated')
@@ -353,8 +396,9 @@ def get_devices(deviceids=None, tenantid=None, return_dict=False):
     if deviceids is not None:
         query['deviceid'] = {'$in': list(deviceids)}
     # Find the device by device ID
-    logging.debug('Retrieving devices [%s] by tenant ID %s' % (
-        deviceids, tenantid))
+    logging.debug(
+        'Retrieving devices [%s] by tenant ID %s', deviceids, tenantid
+    )
     res = None
     try:
         # Get a reference to the MongoDB client
@@ -385,7 +429,7 @@ def get_device(deviceid, tenantid):
     # Build the query
     query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Find the device
-    logging.debug('Retrieving device %s' % deviceid)
+    logging.debug('Retrieving device %s', deviceid)
     device = None
     try:
         # Get a reference to the MongoDB client
@@ -417,8 +461,9 @@ def device_exists(deviceid, tenantid):
         # Get the devices collection
         devices = db.devices
         # Count the devices with the given device ID
-        logging.debug('Searching the device %s (tenant %s)'
-                      % (deviceid, tenantid))
+        logging.debug(
+            'Searching the device %s (tenant %s)', deviceid, tenantid
+        )
         if devices.count_documents(device, limit=1):
             logging.debug('The device exists')
             device_exists = True
@@ -447,7 +492,7 @@ def devices_exists(deviceids):
         # Get the devices collection
         devices = db.devices
         # Count the devices with the given device ID
-        logging.debug('Searching the devices %s' % deviceids)
+        logging.debug('Searching the devices %s', deviceids)
         if devices.count_documents(query) == len(deviceids):
             logging.debug('The devices exist')
             devices_exist = True
@@ -466,8 +511,7 @@ def devices_exists(deviceids):
 # False otherwise
 def is_device_enabled(deviceid, tenantid):
     # Get the device
-    logging.debug('Searching the device %s (tenant %s)'
-                  % (deviceid, tenantid))
+    logging.debug('Searching the device %s (tenant %s)', deviceid, tenantid)
     device = get_device(deviceid, tenantid)
     res = None
     if device is not None:
@@ -487,8 +531,7 @@ def is_device_enabled(deviceid, tenantid):
 # False otherwise
 def is_device_configured(deviceid, tenantid):
     # Get the device
-    logging.debug('Searching the device %s (tenant %s)'
-                  % (deviceid, tenantid))
+    logging.debug('Searching the device %s (tenant %s)', deviceid, tenantid)
     device = get_device(deviceid, tenantid)
     res = None
     if device is not None:
@@ -508,8 +551,7 @@ def is_device_configured(deviceid, tenantid):
 # False otherwise
 def is_device_connected(deviceid, tenantid):
     # Get the device
-    logging.debug('Searching the device %s (tenant %s)'
-                  % (deviceid, tenantid))
+    logging.debug('Searching the device %s (tenant %s)', deviceid, tenantid)
     device = get_device(deviceid, tenantid)
     res = None
     if device is not None:
@@ -528,8 +570,7 @@ def is_device_connected(deviceid, tenantid):
 # Return True if a device can be rebooted, False otherwise
 def can_reboot_device(deviceid, tenantid):
     # Get the device
-    logging.debug('Searching the device %s (tenant %s)'
-                  % (deviceid, tenantid))
+    logging.debug('Searching the device %s (tenant %s)', deviceid, tenantid)
     device = get_device(deviceid, tenantid)
     res = None
     if device is not None:
@@ -549,11 +590,18 @@ def can_reboot_device(deviceid, tenantid):
 # False otherwise
 def interface_exists_on_device(deviceid, tenantid, interface_name):
     # Build the query
-    query = {'deviceid': deviceid, 'tenantid': tenantid,
-             'interfaces.name': interface_name}
+    query = {
+        'deviceid': deviceid,
+        'tenantid': tenantid,
+        'interfaces.name': interface_name
+    }
     # Get the device
-    logging.debug('Getting the interface %s on the device %s (tenant %s)' %
-                  (interface_name, deviceid, tenantid))
+    logging.debug(
+        'Getting the interface %s on the device %s (tenant %s)',
+        interface_name,
+        deviceid,
+        tenantid
+    )
     exists = None
     try:
         # Get a reference to the MongoDB client
@@ -580,8 +628,12 @@ def interface_exists_on_device(deviceid, tenantid, interface_name):
 
 # Return an interface of a device
 def get_interface(deviceid, tenantid, interface_name):
-    logging.debug('Getting the interface %s of device %s (tenant %s)' %
-                  (interface_name, deviceid, tenantid))
+    logging.debug(
+        'Getting the interface %s of device %s (tenant %s)',
+        interface_name,
+        deviceid,
+        tenantid
+    )
     # Build the query
     query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Build the filter
@@ -595,8 +647,8 @@ def get_interface(deviceid, tenantid, interface_name):
         # Get the devices collection
         devices = db.devices
         # Find the interface
-        interfaces = devices.find_one(query, filter)['interfaces']
-        if len(interfaces) == 0:
+        interfaces = devices.find_one(query, filter).get('interfaces')
+        if interfaces is None or len(interfaces) == 0:
             # Interface not found
             logging.debug('Interface not found')
         else:
@@ -611,8 +663,9 @@ def get_interface(deviceid, tenantid, interface_name):
 # Return all the interfaces of a device
 def get_interfaces(deviceid, tenantid):
     # Get the device
-    logging.debug('Getting the interfaces of device %s '
-                  '(tenant %s)' % (deviceid, tenantid))
+    logging.debug(
+        'Getting the interfaces of device %s (tenant %s)', deviceid, tenantid
+    )
     device = get_device(deviceid, tenantid)
     interfaces = None
     if device is not None:
@@ -643,8 +696,11 @@ def get_ipv4_addresses(deviceid, tenantid, interface_name):
 # Get device's IPv6 addresses
 def get_ipv6_addresses(deviceid, tenantid, interface_name):
     # Find the IPv6 addresses by device ID and interface
-    logging.debug('Retrieving IPv6 addresses for device %s (tenant %s)'
-                  % (deviceid, tenantid))
+    logging.debug(
+        'Retrieving IPv6 addresses for device %s (tenant %s)',
+        deviceid,
+        tenantid
+    )
     interface = get_interface(deviceid, tenantid, interface_name)
     addrs = None
     if interface is not None:
@@ -661,15 +717,18 @@ def get_ipv6_addresses(deviceid, tenantid, interface_name):
 # Get device's IP addresses
 def get_ip_addresses(deviceid, tenantid, interface_name):
     # Find the IP addresses by device ID and interface name
-    logging.debug('Retrieving IP addresses for device %s '
-                  'and interface %s (tenant %s)'
-                  % (deviceid, interface_name, tenantid))
+    logging.debug(
+        'Retrieving IP addresses for device %s and interface %s (tenant %s)',
+        deviceid,
+        interface_name,
+        tenantid
+    )
     interface = get_interface(deviceid, tenantid, interface_name)
     addrs = None
     if interface is not None:
         addrs = interface['ipv4_addrs'] + \
             interface['ipv6_addrs']
-        logging.debug('IP addresses: %s' % addrs)
+        logging.debug('IP addresses: %s', addrs)
         return addrs
     # Return the IP addresses associated to the
     # interface if the interface exists,
@@ -682,8 +741,10 @@ def get_ip_addresses(deviceid, tenantid, interface_name):
 def get_ext_ipv4_addresses(deviceid, tenantid, interface_name):
     # Find the external IPv4 addresses by device ID and interface
     logging.debug(
-        'Retrieving external IPv4 addresses for device %s (tenant %s)'
-        % (deviceid, tenantid))
+        'Retrieving external IPv4 addresses for device %s (tenant %s)',
+        deviceid,
+        tenantid
+    )
     interface = get_interface(deviceid, tenantid, interface_name)
     addrs = None
     if interface is not None:
@@ -701,14 +762,16 @@ def get_ext_ipv4_addresses(deviceid, tenantid, interface_name):
 def get_ext_ipv6_addresses(deviceid, tenantid, interface_name):
     # Find the external IPv6 addresses by device ID and interface
     logging.debug(
-        'Retrieving external IPv6 addresses for device %s (tenant %s)'
-        % (deviceid, tenantid))
+        'Retrieving external IPv6 addresses for device %s (tenant %s)',
+        deviceid,
+        tenantid
+    )
     interface = get_interface(deviceid, tenantid, interface_name)
     addrs = None
     if interface is not None:
         # Extract the addresses
         addrs = interface['ext_ipv6_addrs']
-        logging.debug('External IPv6 addresses: %s' % addrs)
+        logging.debug('External IPv6 addresses: %s', addrs)
     # Return the IPv6 addresses associated to the
     # interface if the interface exists,
     # None if the interface does not exist or
@@ -719,14 +782,16 @@ def get_ext_ipv6_addresses(deviceid, tenantid, interface_name):
 # Get device's external IP addresses
 def get_ext_ip_addresses(deviceid, tenantid, interface_name):
     # Find the external IP addresses by device ID and interface name
-    logging.debug('Retrieving external IP addresses for device %s '
-                  'and interface %s (tenant %s)'
-                  % (deviceid, interface_name))
+    logging.debug(
+        'Retrieving external IP addresses for device %s '
+        'and interface %s (tenant %s)',
+        deviceid,
+        interface_name
+    )
     interface = get_interface(deviceid, tenantid, interface_name)
     addrs = None
     if interface is not None:
-        addrs = interface['ext_ipv4_addrs'] + \
-            interface['ext_ipv6_addrs']
+        addrs = interface['ext_ipv4_addrs'] + interface['ext_ipv6_addrs']
         logging.debug('External IP addresses: %s' % addrs)
         return addrs
     # Return the IP addresses associated to the
@@ -739,8 +804,11 @@ def get_ext_ip_addresses(deviceid, tenantid, interface_name):
 # Get device's IPv4 subnets
 def get_ipv4_subnets(deviceid, tenantid, interface_name):
     # Find the IPv4 subnets by device ID and interface
-    logging.debug('Retrieving IPv4 subnets for device %s (tenant %s)'
-                  % (deviceid, tenantid))
+    logging.debug(
+        'Retrieving IPv4 subnets for device %s (tenant %s)',
+        deviceid,
+        tenantid
+    )
     interface = get_interface(deviceid, tenantid, interface_name)
     subnets = None
     if interface is not None:
@@ -757,8 +825,11 @@ def get_ipv4_subnets(deviceid, tenantid, interface_name):
 # Get device's IPv6 subnets
 def get_ipv6_subnets(deviceid, tenantid, interface_name):
     # Find the IPv6 subnets by device ID and interface
-    logging.debug('Retrieving IPv6 subnets for device %s, tenantid %s'
-                  % (deviceid, tenantid))
+    logging.debug(
+        'Retrieving IPv6 subnets for device %s, tenantid %s',
+        deviceid,
+        tenantid
+    )
     interface = get_interface(deviceid, tenantid, interface_name)
     subnets = None
     if interface is not None:
@@ -775,14 +846,16 @@ def get_ipv6_subnets(deviceid, tenantid, interface_name):
 # Get device's IP subnets
 def get_ip_subnets(deviceid, tenantid, interface_name):
     # Find the IP subnets by device ID and interface name
-    logging.debug('Retrieving IP subnets for device %s '
-                  'and interface %s (tenant %s)'
-                  % (deviceid, interface_name, tenantid))
+    logging.debug(
+        'Retrieving IP subnets for device %s and interface %s (tenant %s)',
+        deviceid,
+        interface_name,
+        tenantid
+    )
     interface = get_interface(deviceid, tenantid, interface_name)
     subnets = None
     if interface is not None:
-        subnets = interface['ipv4_subnets'] + \
-            interface['ipv6_subnets']
+        subnets = interface['ipv4_subnets'] + interface['ipv6_subnets']
         logging.debug('IP subnets: %s' % subnets)
         return subnets
     # Return the IP subnets associated to the
@@ -831,8 +904,11 @@ def get_loopbacknet_ipv6(deviceid, tenantid):
 # Get device's global IPv6 addresses
 def get_global_ipv6_addresses(deviceid, tenantid, interface_name):
     # Find the IPv6 addresses by device ID and interface
-    logging.debug('Retrieving global IPv6 addresses for device %s (tenant %s)'
-                  % (deviceid, tenantid))
+    logging.debug(
+        'Retrieving global IPv6 addresses for device %s (tenant %s)',
+        deviceid,
+        tenantid
+    )
     interface = get_interface(deviceid, tenantid, interface_name)
     addrs = None
     if interface is not None:
@@ -842,7 +918,7 @@ def get_global_ipv6_addresses(deviceid, tenantid, interface_name):
         for addr in _addrs:
             if IPv6Interface(addr).is_global:
                 addrs.append(addr)
-        logging.debug('Global IPv6 addresses: %s' % addrs)
+        logging.debug('Global IPv6 addresses: %s', addrs)
     # Return the global IPv6 addresses associated to the
     # interface if the interface exists,
     # None if the interface does not exist or
@@ -851,12 +927,21 @@ def get_global_ipv6_addresses(deviceid, tenantid, interface_name):
 
 
 # Get non link-local IPv6 addresses
-def get_non_link_local_ipv6_addresses(deviceid, tenantid, interface_name, client=None):
+def get_non_link_local_ipv6_addresses(
+    deviceid,
+    tenantid,
+    interface_name,
+    client=None
+):
     # Find the IPv6 addresses by device ID and interface
-    logging.debug('Retrieving non link-local IPv6 addresses for device %s (tenant %s)'
-                  % (deviceid, tenantid))
-    interface = get_interface(deviceid=deviceid, tenantid=tenantid,
-        interface_name=interface_name)
+    logging.debug(
+        'Retrieving non link-local IPv6 addresses for device %s (tenant %s)',
+        deviceid,
+        tenantid
+    )
+    interface = get_interface(
+        deviceid=deviceid, tenantid=tenantid, interface_name=interface_name
+    )
     addrs = None
     if interface is not None:
         # Extract the addresses
@@ -865,7 +950,7 @@ def get_non_link_local_ipv6_addresses(deviceid, tenantid, interface_name, client
         for addr in _addrs:
             if not IPv6Interface(addr).is_link_local:
                 addrs.append(addr)
-        logging.debug('Non link-local IPv6 addresses: %s' % addrs)
+        logging.debug('Non link-local IPv6 addresses: %s', addrs)
     # Return the non link-local IPv6 addresses associated to the
     # interface if the interface exists,
     # None if the interface does not exist or
@@ -877,14 +962,14 @@ def is_proxy_ndp_enabled(deviceid, tenantid):
     """
     Return True if the proxy NDP is enabled on the device, False otherwise.
     """
-    logging.debug('Retrieving enable_proxy_ndp flag for device %s' % deviceid)
+    logging.debug('Retrieving enable_proxy_ndp flag for device %s', deviceid)
     # Get the device
     device = get_device(deviceid, tenantid)
     is_proxy_ndp_enabled = None
     if device is not None:
         # Get the enable_proxy_ndp flag
         is_proxy_ndp_enabled = device.get('enable_proxy_ndp', False)
-        logging.debug('enable_proxy_ndp: %s' % is_proxy_ndp_enabled)
+        logging.debug('enable_proxy_ndp: %s', is_proxy_ndp_enabled)
     # Return True if the enable_proxy_ndp flag is set,
     # False if it is not set,
     # None if the device does not exist or
@@ -897,14 +982,14 @@ def is_ip6tnl_forced(deviceid, tenantid):
     Return True if the force_ip6tnl parameter is set for the device, False
     otherwise.
     """
-    logging.debug('Retrieving force_ip6tnl flag for device %s' % deviceid)
+    logging.debug('Retrieving force_ip6tnl flag for device %s', deviceid)
     # Get the device
     device = get_device(deviceid, tenantid)
     is_ip6tnl_forced = None
     if device is not None:
         # Get the force_ip6tnl flag
         is_ip6tnl_forced = device.get('force_ip6tnl', False)
-        logging.debug('force_ip6tnl: %s' % is_proxy_ndp_enabled)
+        logging.debug('force_ip6tnl: %s', is_proxy_ndp_enabled)
     # Return True if the force_ip6tnl flag is set,
     # False if it is not set,
     # None if the device does not exist or
@@ -917,14 +1002,14 @@ def is_srh_forced(deviceid, tenantid):
     Return True if the force_srh parameter is set for the device, False
     otherwise.
     """
-    logging.debug('Retrieving force_srh flag for device %s' % deviceid)
+    logging.debug('Retrieving force_srh flag for device %s', deviceid)
     # Get the device
     device = get_device(deviceid, tenantid)
     is_srh_forced = None
     if device is not None:
         # Get the force_srh flag
         is_srh_forced = device.get('force_srh', False)
-        logging.debug('force_srh: %s' % is_proxy_ndp_enabled)
+        logging.debug('force_srh: %s', is_proxy_ndp_enabled)
     # Return True if the force_srh flag is set,
     # False if it is not set,
     # None if the device does not exist or
@@ -936,15 +1021,16 @@ def get_incoming_sr_transparency(deviceid, tenantid):
     """
     Return the incoming Segment Routing Transparency.
     """
-    logging.debug('Retrieving incoming_sr_transparency for device %s'
-                  % deviceid)
+    logging.debug(
+        'Retrieving incoming_sr_transparency for device %s', deviceid
+    )
     # Get the device
     device = get_device(deviceid, tenantid)
     incoming_sr_transparency = None
     if device is not None:
         # Get the force_srh flag
         incoming_sr_transparency = device.get('incoming_sr_transparency', None)
-        logging.debug('incoming_sr_transparency: %s' % incoming_sr_transparency)
+        logging.debug('incoming_sr_transparency: %s', incoming_sr_transparency)
     # Return the incoming Segment Routing Transparency,
     # None if the device does not exist or
     # None if an error occurred during the connection to the db
@@ -955,15 +1041,16 @@ def get_outgoing_sr_transparency(deviceid, tenantid):
     """
     Return the outgoing Segment Routing Transparency.
     """
-    logging.debug('Retrieving outgoing_sr_transparency for device %s'
-                  % deviceid)
+    logging.debug(
+        'Retrieving outgoing_sr_transparency for device %s', deviceid
+    )
     # Get the device
     device = get_device(deviceid, tenantid)
     outgoing_sr_transparency = None
     if device is not None:
         # Get the force_srh flag
         outgoing_sr_transparency = device.get('outgoing_sr_transparency', None)
-        logging.debug('outgoing_sr_transparency: %s' % outgoing_sr_transparency)
+        logging.debug('outgoing_sr_transparency: %s', outgoing_sr_transparency)
     # Return the outgoing Segment Routing Transparency,
     # None if the device does not exist or
     # None if an error occurred during the connection to the db
@@ -972,14 +1059,14 @@ def get_outgoing_sr_transparency(deviceid, tenantid):
 
 # Get router's SID prefix
 def get_sid_prefix(deviceid, tenantid):
-    logging.debug('Retrieving SID prefix for device %s' % deviceid)
+    logging.debug('Retrieving SID prefix for device %s', deviceid)
     # Get the device
     device = get_device(deviceid, tenantid)
     sid_prefix = None
     if device is not None:
         # Get the SID prefix
         sid_prefix = device['sid_prefix']
-        logging.debug('SID prefix: %s' % sid_prefix)
+        logging.debug('SID prefix: %s', sid_prefix)
     # Return the SID prefix if the device exists,
     # None if the device does not exist or
     # None if an error occurred during the connection to the db
@@ -988,14 +1075,14 @@ def get_sid_prefix(deviceid, tenantid):
 
 # Get router's public prefix length
 def get_public_prefix_length(deviceid, tenantid):
-    logging.debug('Retrieving public prefix length for device %s' % deviceid)
+    logging.debug('Retrieving public prefix length for device %s', deviceid)
     # Get the device
     device = get_device(deviceid, tenantid)
     public_prefix_length = None
     if device is not None:
         # Get the SID prefix
         public_prefix_length = device['public_prefix_length']
-        logging.debug('Public prefix prefix: %s' % public_prefix_length)
+        logging.debug('Public prefix prefix: %s', public_prefix_length)
     # Return the public prefix length if the device exists,
     # None if the device does not exist or
     # None if an error occurred during the connection to the db
@@ -1004,14 +1091,14 @@ def get_public_prefix_length(deviceid, tenantid):
 
 # Get router's management IP address
 def get_router_mgmtip(deviceid, tenantid):
-    logging.debug('Retrieving management IP for device %s' % deviceid)
+    logging.debug('Retrieving management IP for device %s', deviceid)
     # Get the device
     device = get_device(deviceid, tenantid)
     mgmtip = None
     if device is not None:
         # Get the management IP address
         mgmtip = device['mgmtip']
-        logging.debug('Management IP: %s' % mgmtip)
+        logging.debug('Management IP: %s', mgmtip)
     # Return the management IP address if the device exists,
     # None if the device does not exist or
     # None if an error occurred during the connection to the db
@@ -1086,11 +1173,15 @@ def configure_devices(devices):
         # Add query
         queries.append({'deviceid': deviceid, 'tenantid': tenantid})
         # Add update
-        updates.append({'$set': {
-            'name': name,
-            'description': description,
-            'configured': True
-        }})
+        updates.append(
+            {
+                '$set': {
+                    'name': name,
+                    'description': description,
+                    'configured': True
+                }
+            }
+        )
         # Get interfaces
         interfaces = device['interfaces']
         for interface in interfaces.values():
@@ -1108,17 +1199,20 @@ def configure_devices(devices):
             type = interface['type']
             # Add query
             queries.append(
-                {'deviceid': deviceid, 'interfaces.name': interface_name})
+                {'deviceid': deviceid, 'interfaces.name': interface_name}
+            )
             # Add update
-            updates.append({
-                '$set': {
-                    'interfaces.$.ipv4_addrs': ipv4_addrs,
-                    'interfaces.$.ipv6_addrs': ipv6_addrs,
-                    'interfaces.$.ipv4_subnets': ipv4_subnets,
-                    'interfaces.$.ipv6_subnets': ipv6_subnets,
-                    'interfaces.$.type': type
+            updates.append(
+                {
+                    '$set': {
+                        'interfaces.$.ipv4_addrs': ipv4_addrs,
+                        'interfaces.$.ipv6_addrs': ipv6_addrs,
+                        'interfaces.$.ipv4_subnets': ipv4_subnets,
+                        'interfaces.$.ipv6_subnets': ipv6_subnets,
+                        'interfaces.$.type': type
+                    }
                 }
-            })
+            )
     res = True
     try:
         # Get a reference to the MongoDB client
@@ -1132,7 +1226,7 @@ def configure_devices(devices):
         for query, update in zip(queries, updates):
             success = devices.update_one(query, update).matched_count == 1
             if not success:
-                logging.error('Cannot configure device %s' % query)
+                logging.error('Cannot configure device %s', query)
                 res = False
         logging.debug('Devices configured')
     except pymongo.errors.ServerSelectionTimeoutError:
@@ -1148,7 +1242,9 @@ def change_device_state(deviceid, tenantid, new_state):
     # Build the query
     query = {'deviceid': deviceid, 'tenantid': tenantid}
     if not DeviceState.has_value(new_state.value):
-        logging.error('Cannot change device state: invalid state %d', new_state.value)
+        logging.error(
+            'Cannot change device state: invalid state %d', new_state.value
+        )
         return False
     # Build the update
     update = {'$set': {'state': new_state.value}}
@@ -1161,7 +1257,7 @@ def change_device_state(deviceid, tenantid, new_state):
         # Get the devices collection
         devices = db.devices
         # Change 'enabled' flag
-        logging.debug('Change state for device %s' % deviceid)
+        logging.debug('Change state for device %s', deviceid)
         success = devices.update_one(query, update).matched_count == 1
         if not success:
             logging.error('Cannot change state: device not found')
@@ -1217,7 +1313,7 @@ def set_device_configured_flag(deviceid, tenantid, configured):
         # Get the devices collection
         devices = db.devices
         # Change 'configured' flag
-        logging.debug('Change configured flag for device %s' % deviceid)
+        logging.debug('Change configured flag for device %s', deviceid)
         success = devices.update_one(query, update).matched_count == 1
         if not success:
             logging.error('Cannot change configured flag: device not found')
@@ -1245,7 +1341,7 @@ def set_device_connected_flag(deviceid, tenantid, connected):
         # Get the devices collection
         devices = db.devices
         # Change 'connected' flag
-        logging.debug('Change connected flag for device %s' % deviceid)
+        logging.debug('Change connected flag for device %s', deviceid)
         success = devices.update_one(query, update).matched_count == 1
         if not success:
             logging.error('Cannot change connected flag: device not found')
@@ -1273,10 +1369,12 @@ def set_device_reconciliation_flag(deviceid, tenantid, flag=True):
         # Get the devices collection
         devices = db.devices
         # Change 'reconciliation' flag
-        logging.debug('Change reconciliation flag for device %s' % deviceid)
+        logging.debug('Change reconciliation flag for device %s', deviceid)
         success = devices.update_one(query, update).matched_count == 1
         if not success:
-            logging.error('Cannot change reconciliation flag: device not found')
+            logging.error(
+                'Cannot change reconciliation flag: device not found'
+            )
         else:
             logging.debug('Reconciliation flag updated successfully')
     except pymongo.errors.ServerSelectionTimeoutError:
@@ -1291,7 +1389,7 @@ def get_device_reconciliation_flag(deviceid, tenantid):
     # Build the query
     query = {'deviceid': deviceid, 'tenantid': tenantid}
     # Find the device
-    logging.debug('Retrieving device reconciliation flag %s' % deviceid)
+    logging.debug('Retrieving device reconciliation flag %s', deviceid)
     flag = None
     try:
         # Get a reference to the MongoDB client
@@ -1304,7 +1402,7 @@ def get_device_reconciliation_flag(deviceid, tenantid):
         device = devices.find_one(query)
         # Get the flag
         flag = device['reconciliation_required']
-        logging.debug('Device reconciliation flag: %s' % flag)
+        logging.debug('Device reconciliation flag: %s', flag)
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the flag
@@ -1323,31 +1421,39 @@ def get_and_inc_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
         # Get the devices collection
         devices = db.devices
         # Find the device
-        logging.debug('Getting the device %s (tenant %s)'
-                      % (deviceid, tenantid))
+        logging.debug('Getting the device %s (tenant %s)', deviceid, tenantid)
         # Build query
-        query = {'deviceid': deviceid,
-                 'tenantid': tenantid,
-                 'stats.counters.tunnels.tunnel_mode': {'$ne': tunnel_name}}
+        query = {
+            'deviceid': deviceid,
+            'tenantid': tenantid,
+            'stats.counters.tunnels.tunnel_mode': {'$ne': tunnel_name}
+        }
         # Build the update
-        update = {'$push': {
-            'stats.counters.tunnels': {'tunnel_mode': tunnel_name, 'counter': 0}}}
+        update = {
+            '$push': {
+                'stats.counters.tunnels': {
+                    'tunnel_mode': tunnel_name,
+                    'counter': 0
+                }
+            }
+        }
         # If the counter does not exist, create it
         devices.update_one(query, update)
         # Build the query
-        query = {'deviceid': deviceid,
-                 'stats.counters.tunnels.tunnel_mode': tunnel_name}
+        query = {
+            'deviceid': deviceid,
+            'stats.counters.tunnels.tunnel_mode': tunnel_name
+        }
         # Build the update
         update = {'$inc': {'stats.counters.tunnels.$.counter': 1}}
         # Increase the counter for the tunnel mode
-        device = devices.find_one_and_update(
-            query, update)
+        device = devices.find_one_and_update(query, update)
         # Return the counter if exists, 0 otherwise
         counter = 0
         for tunnel_mode in device['stats']['counters']['tunnels']:
             if tunnel_name == tunnel_mode['tunnel_mode']:
                 counter = tunnel_mode['counter']
-        logging.debug('Counter before the increment: %s' % counter)
+        logging.debug('Counter before the increment: %s', counter)
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the counter if success,
@@ -1359,9 +1465,11 @@ def get_and_inc_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
 # return the counter after the decrement
 def dec_and_get_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
     # Build the query
-    query = {'deviceid': deviceid,
-             'tenantid': tenantid,
-             'stats.counters.tunnels.tunnel_mode': tunnel_name}
+    query = {
+        'deviceid': deviceid,
+        'tenantid': tenantid,
+        'stats.counters.tunnels.tunnel_mode': tunnel_name
+    }
     counter = None
     try:
         # Get a reference to the MongoDB client
@@ -1371,7 +1479,7 @@ def dec_and_get_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
         # Get the devices collection
         devices = db.devices
         # Find the device
-        logging.debug('Getting the device %s (tenant %s)' % (deviceid, tenantid))
+        logging.debug('Getting the device %s (tenant %s)', deviceid, tenantid)
         # Decrease the counter for the tunnel mode
         device = devices.find_one_and_update(
             query, {'$inc': {'stats.counters.tunnels.$.counter': -1}},
@@ -1387,12 +1495,20 @@ def dec_and_get_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
         if counter == -1:
             logging.error('Cannot update counter')
             return None
-        logging.debug('Counter after the decrement: %s' % counter)
+        logging.debug('Counter after the decrement: %s', counter)
         # If counter is 0, remove the tunnel mode from the device stats
         if counter == 0:
             logging.debug('Counter set to 0, removing tunnel mode')
             devices.update_one(
-                query, {'$pull': {'stats.counters.tunnels': {'tunnel_mode': tunnel_name}}})
+                query,
+                {
+                    '$pull': {
+                        'stats.counters.tunnels': {
+                            'tunnel_mode': tunnel_name
+                        }
+                    }
+                }
+            )
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the counter if success,
@@ -1403,9 +1519,11 @@ def dec_and_get_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
 # Reset the counter of a tunnel mode on a device
 def reset_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
     # Build the query
-    query = {'deviceid': deviceid,
-             'tenantid': tenantid,
-             'stats.counters.tunnels.tunnel_mode': tunnel_name}
+    query = {
+        'deviceid': deviceid,
+        'tenantid': tenantid,
+        'stats.counters.tunnels.tunnel_mode': tunnel_name
+    }
     counter = None
     try:
         # Get a reference to the MongoDB client
@@ -1415,13 +1533,20 @@ def reset_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
         # Get the devices collection
         devices = db.devices
         # Find the device
-        logging.debug('Getting the device %s (tenant %s)' % (deviceid, tenantid))
+        logging.debug('Getting the device %s (tenant %s)', deviceid, tenantid)
         # Decrease the counter for the tunnel mode
         device = devices.find_one_and_update(
-            query, {'$set': {'stats.counters.tunnels.$.counter': 0}},
+            query,
+            {
+                '$set': {
+                    'stats.counters.tunnels.$.counter': 0
+                }
+            },
             return_document=ReturnDocument.AFTER)
         if device is None:
-            logging.warning('Device not found or tunnel mode counter not found')
+            logging.warning(
+                'Device not found or tunnel mode counter not found'
+            )
             return 0
         # Return the counter
         counter = -1
@@ -1431,17 +1556,26 @@ def reset_tunnel_mode_counter(tunnel_name, deviceid, tenantid):
         if counter == -1:
             logging.error('Cannot update counter')
             return None
-        logging.debug('Counter after the decrement: %s' % counter)
+        logging.debug('Counter after the decrement: %s', counter)
         # If counter is 0, remove the tunnel mode from the device stats
         if counter == 0:
             logging.debug('Counter set to 0, removing tunnel mode')
             devices.update_one(
-                query, {'$pull': {'stats.counters.tunnels': {'tunnel_mode': tunnel_name}}})
+                query,
+                {
+                    '$pull': {
+                        'stats.counters.tunnels': {
+                            'tunnel_mode': tunnel_name
+                        }
+                    }
+                }
+            )
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the counter if success,
     # None if an error occurred during the connection to the db
     return counter
+
 
 # Return the number of tunnels configured on a device
 def get_num_tunnels(deviceid, tenantid):
@@ -1456,11 +1590,11 @@ def get_num_tunnels(deviceid, tenantid):
         # Get the devices collection
         devices = db.devices
         # Find the device
-        logging.debug('Counting tunnels for device %s' % deviceid)
+        logging.debug('Counting tunnels for device %s', deviceid)
         # Get the device
         device = devices.find_one(query)
         if device is None:
-            logging.error('Device %s not found' % deviceid)
+            logging.error('Device %s not found', deviceid)
         else:
             # Extract tunnel mode counter
             counters = device['stats']['counters']['tunnels']
@@ -1468,7 +1602,7 @@ def get_num_tunnels(deviceid, tenantid):
             num = 0
             for tunnel_mode in counters:
                 num += tunnel_mode['counter']
-            logging.debug('%s tunnels found' % num)
+            logging.debug('%s tunnels found', num)
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the number of tunnels if success,
@@ -1487,35 +1621,48 @@ def inc_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
         # Get the overlays collection
         overlays = db.overlays
         # Find the device
-        logging.debug('Getting the overlay %s (tenant %s)'
-                      % (overlayid, tenantid))
+        logging.debug(
+            'Getting the overlay %s (tenant %s)',
+            overlayid,
+            tenantid
+        )
         # Build query
-        query = {'_id': ObjectId(overlayid),
-                 'tenantid': tenantid,
-                 'stats.counters.tunnels.deviceid': {'$ne': deviceid},
-                 'stats.counters.tunnels.dest_slice': {'$ne': dest_slice}}
+        query = {
+            '_id': ObjectId(overlayid),
+            'tenantid': tenantid,
+            'stats.counters.tunnels.deviceid': {'$ne': deviceid},
+            'stats.counters.tunnels.dest_slice': {'$ne': dest_slice}
+        }
         # Build the update
-        update = {'$push': {
-            'stats.counters.tunnels': {'deviceid': deviceid, 'dest_slice': dest_slice, 'counter': 0}}}
+        update = {
+            '$push': {
+                'stats.counters.tunnels': {
+                    'deviceid': deviceid,
+                    'dest_slice': dest_slice,
+                    'counter': 0
+                }
+            }
+        }
         # If the counter does not exist, create it
         overlays.update_one(query, update)
         # Build the query
-        query = {'_id': ObjectId(overlayid),
-                 'tenantid': tenantid,
-                 'stats.counters.tunnels.deviceid': deviceid,
-                 'stats.counters.tunnels.dest_slice': dest_slice}
+        query = {
+            '_id': ObjectId(overlayid),
+            'tenantid': tenantid,
+            'stats.counters.tunnels.deviceid': deviceid,
+            'stats.counters.tunnels.dest_slice': dest_slice
+        }
         # Build the update
         update = {'$inc': {'stats.counters.tunnels.$.counter': 1}}
         # Increase the tunnels counter for the overlay
-        overlay = overlays.find_one_and_update(
-            query, update)
+        overlay = overlays.find_one_and_update(query, update)
         # Return the counter if exists, 0 otherwise
         counter = 0
         for tunnel in overlay['stats']['counters']['tunnels']:
             if deviceid == tunnel['deviceid'] and \
                     dest_slice == tunnel['dest_slice']:
                 counter = tunnel['counter']
-        logging.debug('Counter before the increment: %s' % counter)
+        logging.debug('Counter before the increment: %s', counter)
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the counter if success,
@@ -1527,10 +1674,12 @@ def inc_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
 # return the counter after the decrement
 def dec_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
     # Build the query
-    query = {'_id': ObjectId(overlayid),
-             'tenantid': tenantid,
-             'stats.counters.tunnels.deviceid': deviceid,
-             'stats.counters.tunnels.dest_slice': dest_slice}
+    query = {
+        '_id': ObjectId(overlayid),
+        'tenantid': tenantid,
+        'stats.counters.tunnels.deviceid': deviceid,
+        'stats.counters.tunnels.dest_slice': dest_slice
+    }
     counter = None
     try:
         # Get a reference to the MongoDB client
@@ -1540,10 +1689,17 @@ def dec_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
         # Get the overlays collection
         overlays = db.overlays
         # Find the overlay
-        logging.debug('Getting the overlay %s (tenant %s)' % (overlayid, tenantid))
+        logging.debug(
+            'Getting the overlay %s (tenant %s)', overlayid, tenantid
+        )
         # Decrease the counter for the tunnel mode
         overlay = overlays.find_one_and_update(
-            query, {'$inc': {'stats.counters.tunnels.$.counter': -1}},
+            query,
+            {
+                '$inc': {
+                    'stats.counters.tunnels.$.counter': -1
+                }
+            },
             return_document=ReturnDocument.AFTER)
         if overlay is None:
             logging.error('Overlay not found or tunnels counter not found')
@@ -1557,12 +1713,21 @@ def dec_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
         if counter == -1:
             logging.error('Cannot update counter')
             return None
-        logging.debug('Counter after the decrement: %s' % counter)
+        logging.debug('Counter after the decrement: %s', counter)
         # If counter is 0, remove the tunnel from the overlay stats
         if counter == 0:
             logging.debug('Counter set to 0, removing tunnel mode')
             overlays.update_one(
-                query, {'$pull': {'stats.counters.tunnels': {'deviceid': deviceid, 'dest_slice': dest_slice}}})
+                query,
+                {
+                    '$pull': {
+                        'stats.counters.tunnels': {
+                            'deviceid': deviceid,
+                            'dest_slice': dest_slice
+                        }
+                    }
+                }
+            )
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the counter if success,
@@ -1573,8 +1738,10 @@ def dec_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
 # Reset the counter of a tunnels on a overlay
 def reset_overlay_stats(tenantid, deviceid, overlayid=None):
     # Build the query
-    query = {'tenantid': tenantid,
-             'stats.counters.tunnels.deviceid': deviceid}
+    query = {
+        'tenantid': tenantid,
+        'stats.counters.tunnels.deviceid': deviceid
+    }
     if overlayid is not None:
         query['_id'] = ObjectId(overlayid)
     try:
@@ -1585,11 +1752,22 @@ def reset_overlay_stats(tenantid, deviceid, overlayid=None):
         # Get the overlays collection
         overlays = db.overlays
         # Find the overlay
-        logging.debug('Removing the overlay stats overlayid %s, deviceid %s (tenant %s)' % (overlayid, deviceid, tenantid))
+        logging.debug(
+            'Removing the overlay stats overlayid %s, deviceid %s (tenant %s)',
+            overlayid,
+            deviceid,
+            tenantid
+        )
         # Remove the overlay stats
-        overlay = overlays.find_one_and_update(
-            query, {'$set': {'stats.counters.tunnels.$.counter': 0}},
-            return_document=ReturnDocument.AFTER)
+        overlays.find_one_and_update(
+            query,
+            {
+                '$set': {
+                    'stats.counters.tunnels.$.counter': 0
+                }
+            },
+            return_document=ReturnDocument.AFTER
+        )
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return True if success
@@ -1611,9 +1789,10 @@ def update_device_vtep_mac(deviceid, tenantid, device_vtep_mac):
         # Get the devices collection
         devices = db.devices
         # Find the device
-        logging.debug('Update device %s (tenant %s) VTEP MAC address'
-                      % (deviceid, tenantid))
-        logging.debug('New MAC address: %s' % device_vtep_mac)
+        logging.debug(
+            'Update device %s (tenant %s) VTEP MAC address', deviceid, tenantid
+        )
+        logging.debug('New MAC address: %s', device_vtep_mac)
         # Get the device
         success = devices.update_one(query, update).matched_count == 1
         if not success:
@@ -1641,9 +1820,10 @@ def update_device_vtep_ip(deviceid, tenantid, device_vtep_ip):
         # Get the devices collection
         devices = db.devices
         # Find the device
-        logging.debug('Update device %s (tenant %s) VTEP IP address'
-                      % (deviceid, tenantid))
-        logging.debug('New IP address: %s' % device_vtep_ip)
+        logging.debug(
+            'Update device %s (tenant %s) VTEP IP address', deviceid, tenantid
+        )
+        logging.debug('New IP address: %s', device_vtep_ip)
         # Get the device
         success = devices.update_one(query, update).matched_count == 1
         if not success:
@@ -1669,14 +1849,15 @@ def get_device_vtep_mac(deviceid, tenantid):
         # Get the devices collection
         devices = db.devices
         # Find the device
-        logging.debug('Get device %s (tenant %s) VTEP MAC address'
-                      % (deviceid, tenantid))
+        logging.debug(
+            'Get device %s (tenant %s) VTEP MAC address', deviceid, tenantid
+        )
         # Get the device
         res = devices.find_one(query)['mgmt_mac']
         if res is None:
             logging.error('Device not found')
         else:
-            logging.debug('Found VTEP MAC address: %s' % res)
+            logging.debug('Found VTEP MAC address: %s', res)
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the device VTEP MAC address
@@ -1704,8 +1885,8 @@ def set_tunnel_mode(deviceid, tenantid, tunnel_mode):
         # Get the devices collection
         devices = db.devices
         # Find the device
-        logging.debug('Update device %s tunnel mode' % deviceid)
-        logging.debug('New tunnel mode: %s' % tunnel_mode)
+        logging.debug('Update device %s tunnel mode', deviceid)
+        logging.debug('New tunnel mode: %s', tunnel_mode)
         # Get the device
         success = devices.update_one(query, update).matched_count == 1
         if not success:
@@ -1722,7 +1903,14 @@ def set_tunnel_mode(deviceid, tenantid, tunnel_mode):
 
 
 # Create overlay
-def create_overlay(name, type, slices, tenantid, tunnel_mode, transport_proto='ipv6'):
+def create_overlay(
+    name,
+    type,
+    slices,
+    tenantid,
+    tunnel_mode,
+    transport_proto='ipv6'
+):
     # Build the document
     overlay = {
         'name': name,
@@ -1746,7 +1934,7 @@ def create_overlay(name, type, slices, tenantid, tunnel_mode, transport_proto='i
         # Get the overlays collection
         overlays = db.overlays
         # Add the overlay to the collection
-        logging.debug('Creating the overlay: %s' % overlay)
+        logging.debug('Creating the overlay: %s', overlay)
         overlayid = overlays.insert_one(overlay).inserted_id
         if overlayid is not None:
             logging.debug('Overlay created successfully')
@@ -1771,7 +1959,7 @@ def remove_overlay(overlayid, tenantid):
         # Get the overlays collection
         overlays = db.overlays
         # Remove the overlay from the collection
-        logging.debug('Removing the overlay: %s' % overlayid)
+        logging.debug('Removing the overlay: %s', overlayid)
         success = overlays.delete_one(overlay).deleted_count == 1
         if success:
             logging.debug('Overlay removed successfully')
@@ -1819,7 +2007,7 @@ def remove_overlays_by_tenantid(tenantid):
         # Get the overlays collection
         overlays = db.overlays
         # Delete all the overlays in the collection
-        logging.debug('Removing all overlays of tenant: %s' % tenantid)
+        logging.debug('Removing all overlays of tenant: %s', tenantid)
         success = overlays.delete_many(filter).acknowledged
         if success:
             logging.debug('Overlays removed successfully')
@@ -1844,10 +2032,10 @@ def get_overlay(overlayid, tenantid):
         # Get the overlays collection
         overlays = db.overlays
         # Find the device by device ID
-        logging.debug('Retrieving overlay %s' % overlayid)
+        logging.debug('Retrieving overlay %s', overlayid)
         overlay = overlays.find_one(query)
         if overlay is not None:
-            logging.debug('Overlay found: %s' % overlay)
+            logging.debug('Overlay found: %s', overlay)
         else:
             logging.error('Overlay not found')
     except pymongo.errors.ServerSelectionTimeoutError:
@@ -1865,8 +2053,9 @@ def get_overlays(overlayids=None, tenantid=None):
     if tenantid is not None:
         query['tenantid'] = tenantid
     if overlayids is not None:
-        query['_id'] = {'$in': [ObjectId(overlayid)
-                                for overlayid in overlayids]}
+        query['_id'] = {
+            '$in': [ObjectId(overlayid) for overlayid in overlayids]
+        }
     overlays = None
     try:
         # Get a reference to the MongoDB client
@@ -1876,9 +2065,9 @@ def get_overlays(overlayids=None, tenantid=None):
         # Get the overlays collection
         overlays = db.overlays
         # Find the device by device ID
-        logging.debug('Retrieving overlays by tenant ID %s' % tenantid)
+        logging.debug('Retrieving overlays by tenant ID %s', tenantid)
         overlays = list(overlays.find(query))
-        logging.debug('Overlays found: %s' % overlays)
+        logging.debug('Overlays found: %s', overlays)
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the list of the overlays if no errors or
@@ -1899,11 +2088,10 @@ def get_overlay_by_name(name, tenantid):
         # Get the overlays collection
         overlays = db.overlays
         # Find the overlay
-        logging.debug('Searching the overlay %s, tenant ID %s' %
-                      (name, tenantid))
+        logging.debug('Searching the overlay %s, tenant ID %s', name, tenantid)
         overlay = overlays.find_one(query)
         if overlay is not None:
-            logging.debug('Overlay found: %s' % overlay)
+            logging.debug('Overlay found: %s', overlay)
         else:
             logging.debug('Cannot find the overlay')
     except pymongo.errors.ServerSelectionTimeoutError:
@@ -1928,8 +2116,7 @@ def overlay_exists(name, tenantid):
         # Get the overlays collection
         overlays = db.overlays
         # Count the overlays with the given name and tenant ID
-        logging.debug('Searching the overlay %s, tenant ID %s' %
-                      (name, tenantid))
+        logging.debug('Searching the overlay %s, tenant ID %s', name, tenantid)
         if overlays.count_documents(query, limit=1):
             logging.debug('The overlay exists')
             overlay_exists = True
@@ -1957,10 +2144,14 @@ def add_slice_to_overlay(overlayid, tenantid, _slice):
         # Get the overlays collection
         overlays = db.overlays
         # Add the slice to the overlay
-        logging.debug('Adding the slice to the overlay %s' % overlayid)
+        logging.debug('Adding the slice to the overlay %s', overlayid)
         success = overlays.update_one(
             query,
-            {'$push': {'slices': _slice}}
+            {
+                '$push': {
+                    'slices': _slice
+                }
+            }
         ).matched_count == 1
         if success:
             logging.debug('Slice added to the overlay')
@@ -1987,7 +2178,7 @@ def add_many_slices_to_overlay(overlayid, tenantid, slices):
         # Get the overlays collection
         overlays = db.overlays
         # Add the slices to the overlay
-        logging.debug('Adding the slice to the overlay %s' % overlayid)
+        logging.debug('Adding the slice to the overlay %s', overlayid)
         success = overlays.update_one(
             query,
             {'$pushAll': {'slices': slices}}
@@ -2017,10 +2208,14 @@ def remove_slice_from_overlay(overlayid, tenantid, _slice):
         # Get the overlays collection
         overlays = db.overlays
         # Remove the slice from the overlay
-        logging.debug('Removing the slice from the overlay %s' % overlayid)
+        logging.debug('Removing the slice from the overlay %s', overlayid)
         success = overlays.update_one(
             query,
-            {'$pull': {'slices': _slice}}
+            {
+                '$pull': {
+                    'slices': _slice
+                }
+            }
         ).matched_count == 1
         if success:
             logging.debug('Slice removed from the overlay')
@@ -2047,7 +2242,7 @@ def remove_many_slices_from_overlay(overlayid, tenantid, slices):
         # Get the overlays collection
         overlays = db.overlays
         # Remove the slices to the overlay
-        logging.debug('Removing the slices from the overlay %s' % overlayid)
+        logging.debug('Removing the slices from the overlay %s', overlayid)
         success = overlays.update_one(
             query,
             {'$pullAll': {'slices': slices}}
@@ -2067,13 +2262,13 @@ def remove_many_slices_from_overlay(overlayid, tenantid, slices):
 # Retrieve the slices contained in a given overlay
 def get_slices_in_overlay(overlayid, tenantid):
     # Get the overlays
-    logging.debug('Getting the slices in the overlay %s' % overlayid)
+    logging.debug('Getting the slices in the overlay %s', overlayid)
     overlay = get_overlay(overlayid, tenantid)
     # Extract the slices from the overlay
     slices = None
     if overlay is not None:
         slices = overlay['slices']
-        logging.debug('Slices found: %s' % slices)
+        logging.debug('Slices found: %s', slices)
     # Return the list of the slices if the overlay exists
     # None if the overlay does not exist
     # None if an error occurred during the connection to the db
@@ -2090,8 +2285,11 @@ def get_overlay_containing_slice(_slice, tenantid):
         'slices.interface_name': _slice['interface_name']
     }
     # Find the device
-    logging.debug('Checking if the slice %s (tenant %s) '
-                  'is assigned to an overlay' % (_slice, tenantid))
+    logging.debug(
+        'Checking if the slice %s (tenant %s) is assigned to an overlay',
+        _slice,
+        tenantid
+    )
     overlay = None
     try:
         # Get a reference to the MongoDB client
@@ -2103,7 +2301,7 @@ def get_overlay_containing_slice(_slice, tenantid):
         # Find the overlays
         overlay = overlays.find_one(query)
         if overlay is not None:
-            logging.debug('Slice assigned to the overlay %s' % overlay)
+            logging.debug('Slice assigned to the overlay %s', overlay)
         else:
             logging.debug('The slice is not assigned to any overlay')
     except pymongo.errors.ServerSelectionTimeoutError:
@@ -2121,8 +2319,12 @@ def get_overlay_containing_device(deviceid, tenantid):
         'slices.deviceid': deviceid
     }
     # Find the device
-    logging.debug('Checking if the device %s (tenant %s) '
-                  'is partecipating to some overlay' % (deviceid, tenantid))
+    logging.debug(
+        'Checking if the device %s (tenant %s) '
+        'is partecipating to some overlay',
+        deviceid,
+        tenantid
+    )
     overlay = None
     try:
         # Get a reference to the MongoDB client
@@ -2135,7 +2337,7 @@ def get_overlay_containing_device(deviceid, tenantid):
         overlay = overlays.find_one(query)
         if overlay is not None:
             logging.debug(
-                'Device is partecipating to the overlay %s' % overlay)
+                'Device is partecipating to the overlay %s', overlay)
         else:
             logging.debug('The device is not partpartecipating to any overlay')
     except pymongo.errors.ServerSelectionTimeoutError:
@@ -2148,8 +2350,13 @@ def get_overlay_containing_device(deviceid, tenantid):
 # not common overlays between the two devices, None if an error occurred
 def get_overlays_containing_devices(deviceid1, deviceid2, tenantid):
     # Find the overlays
-    logging.debug('Retrieving all the overlays containing device %s and '
-                  'device %s, tenant %s' % (deviceid1, deviceid2, tenantid))
+    logging.debug(
+        'Retrieving all the overlays containing device %s and '
+        'device %s, tenant %s',
+        deviceid1,
+        deviceid2,
+        tenantid
+    )
     overlays_list = None
     try:
         # Get a reference to the MongoDB client
@@ -2159,20 +2366,22 @@ def get_overlays_containing_devices(deviceid1, deviceid2, tenantid):
         # Get the overlays collection
         overlays = db.overlays
         # Find the overlays containing the two devices
-        overlays_list = overlays.aggregate([
-            {
-                "$match": {
-                    'tenantid': tenantid,
-                    'slices.deviceid': deviceid1,
+        overlays_list = overlays.aggregate(
+            [
+                {
+                    "$match": {
+                        'tenantid': tenantid,
+                        'slices.deviceid': deviceid1,
+                    }
+                },
+                {
+                    "$match": {
+                        'tenantid': tenantid,
+                        'slices.deviceid': deviceid2,
+                    }
                 }
-            },
-            {
-                "$match": {
-                    'tenantid': tenantid,
-                    'slices.deviceid': deviceid2,
-                }
-            }
-        ])
+            ]
+        )
         overlays_list = list(overlays_list)
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
@@ -2189,8 +2398,12 @@ def get_overlays_containing_device(deviceid, tenantid):
         'slices.deviceid': deviceid
     }
     # Find the device
-    logging.debug('Checking if the device %s (tenant %s) '
-                  'is partecipating to some overlay' % (deviceid, tenantid))
+    logging.debug(
+        'Checking if the device %s (tenant %s) '
+        'is partecipating to some overlay',
+        deviceid,
+        tenantid
+    )
     overlays = None
     try:
         # Get a reference to the MongoDB client
@@ -2203,7 +2416,8 @@ def get_overlays_containing_device(deviceid, tenantid):
         overlays = list(overlays.find(query))
         if overlays is not None:
             logging.debug(
-                'Device is partecipating to the overlays %s' % overlays)
+                'Device is partecipating to the overlays %s', overlays
+            )
         else:
             logging.debug('The device is not partpartecipating to any overlay')
     except pymongo.errors.ServerSelectionTimeoutError:
@@ -2233,16 +2447,23 @@ def reset_created_tunnels(tenantid, deviceid):
                 if created_tunnels[idx]['tunnel_key'].startswith(deviceid):
                     del _created_tunnels[idx]
             # Reset the counter
-            query = {'_id': overlay['_id'],
-                     'tenantid': tenantid}
+            query = {
+                '_id': overlay['_id'],
+                'tenantid': tenantid
+            }
             overlays.update_one(
-                    query, {'$set': {'created_tunnel': _created_tunnels}})
+                query,
+                {
+                    '$set': {
+                        'created_tunnel': _created_tunnels
+                    }
+                }
+            )
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the counter if success,
     # None if an error occurred during the connection to the db
     return counter
-    
 
 
 ''' Functions operating on the tenants collection '''
@@ -2261,7 +2482,7 @@ def get_tenant_config(tenantid):
         # Get the tenants collection
         tenants = db.tenants
         # Find the tenant configuration
-        logging.debug('Getting the configuration of the tenant %s' % tenantid)
+        logging.debug('Getting the configuration of the tenant %s', tenantid)
         tenant = tenants.find_one(query)
         if tenant is not None:
             config = tenant.get('config')
@@ -2287,14 +2508,14 @@ def get_tenant_configs(tenantids):
         # Get the tenants collection
         tenants = db.tenants
         # Get the tenant configs
-        logging.debug('Getting the tenants %s' % tenantids)
+        logging.debug('Getting the tenants %s', tenantids)
         tenants = tenants.find(query, {'conf': 1})
         # Return the configs
         configs = dict()
         for tenant in tenants:
             tenantid = tenant['tenantid']
             if not tenant.get('configured', False):
-                logging.error('Tenant %s is not configured' % tenantid)
+                logging.error('Tenant %s is not configured', tenantid)
                 return None
             configs[tenantid] = {
                 'name': tenant['name'],
@@ -2302,7 +2523,7 @@ def get_tenant_configs(tenantids):
                 'config': tenant['config'],
                 'info': tenant['info']
             }
-        logging.debug('Configs: %s' % configs)
+        logging.debug('Configs: %s', configs)
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the configurations if no errors,
@@ -2349,8 +2570,12 @@ def get_tenantid(token):
 
 # Configure a tenant
 def configure_tenant(tenantid, tenant_info=None, vxlan_port=None):
-    logging.debug('Configuring tenant %s (info %s, vxlan_port %s)'
-                  % (tenantid, tenant_info, vxlan_port))
+    logging.debug(
+        'Configuring tenant %s (info %s, vxlan_port %s)',
+        tenantid,
+        tenant_info,
+        vxlan_port
+    )
     # Build the query
     query = {'tenantid': tenantid}
     # Build the update statement
@@ -2407,8 +2632,9 @@ def configure_tenant(tenantid, tenant_info=None, vxlan_port=None):
 # False otherwise,
 # None if an error occurred to the connection to the db
 def is_tenant_configured(tenantid):
-    logging.debug('Checking if tenant %s already '
-                  'received the configuration' % tenantid)
+    logging.debug(
+        'Checking if tenant %s already received the configuration', tenantid
+    )
     # Build the query
     query = {'tenantid': tenantid}
     is_config = None
@@ -2448,7 +2674,7 @@ def tenant_exists(tenantid):
         # Get the tenants collection
         tenants = db.tenants
         # Count the tenants with the given tenant ID
-        logging.debug('Searching the tenant %s' % tenantid)
+        logging.debug('Searching the tenant %s', tenantid)
         if tenants.count_documents(query, limit=1):
             logging.debug('The tenant exists')
             tenant_exists = True
@@ -2473,7 +2699,7 @@ def get_new_tableid(overlayid, tenantid):
     tenants = db.tenants
     # Get a new table ID
     tableid = None
-    logging.debug('Getting new table ID for the tenant %s' % tenantid)
+    logging.debug('Getting new table ID for the tenant %s', tenantid)
     try:
         # Build the query
         query = {'tenantid': tenantid}
@@ -2482,7 +2708,9 @@ def get_new_tableid(overlayid, tenantid):
         if tenant is None:
             logging.debug('The tenant does not exist')
         else:
-            reusable_tableids = tenant['counters']['tableid']['reusable_tableids']
+            reusable_tableids = (
+                tenant['counters']['tableid']['reusable_tableids']
+            )
             if len(reusable_tableids) > 0:
                 # Get a table ID
                 tableid = reusable_tableids.pop()
@@ -2490,10 +2718,16 @@ def get_new_tableid(overlayid, tenantid):
                 if assign_tableid_to_overlay(overlayid, tenantid, tableid):
                     # Remove the table ID from the reusable_tableids list
                     update = {
-                        '$set': {'counters.tableid.reusable_tableids': reusable_tableids}}
+                        '$set': {
+                            'counters.tableid.reusable_tableids': (
+                                reusable_tableids
+                            )
+                        }
+                    }
                     if tenants.update_one(query, update).modified_count != 1:
                         logging.error(
-                            'Error while updating reusable table IDs list')
+                            'Error while updating reusable table IDs list'
+                        )
                         tableid = None
                 else:
                     tableid = None
@@ -2501,22 +2735,34 @@ def get_new_tableid(overlayid, tenantid):
                 # No reusable ID, allocate a new table ID
                 tenant = tenants.find_one(query)
                 if tenantid is not None:
-                    tableid = tenant['counters']['tableid']['last_allocated_tableid']
+                    tableid = (
+                        tenant['counters']['tableid']['last_allocated_tableid']
+                    )
                     while True:
                         tableid += 1
                         if tableid not in RESERVED_TABLEIDS:
-                            logging.debug('Found table ID: %s' % tableid)
+                            logging.debug('Found table ID: %s', tableid)
                             break
                         logging.debug(
-                            'Table ID %s is reserved. Getting new table ID' % tableid)
+                            'Table ID %s is reserved. Getting new table ID',
+                            tableid
+                        )
                     # Assign it to the overlay
                     if assign_tableid_to_overlay(overlayid, tenantid, tableid):
                         # Remove the table ID from the reusable_tableids list
                         update = {
-                            '$set': {'counters.tableid.last_allocated_tableid': tableid}}
-                        if tenants.update_one(query, update).modified_count != 1:
+                            '$set': {
+                                'counters.tableid.last_allocated_tableid': (
+                                    tableid
+                                )
+                            }
+                        }
+                        if tenants.update_one(
+                            query, update
+                        ).modified_count != 1:
                             logging.error(
-                                'Error while updating reusable table IDs list')
+                                'Error while updating reusable table IDs list'
+                            )
                             tableid = None
                     else:
                         tableid = None
@@ -2539,23 +2785,28 @@ def release_tableid(overlayid, tenantid):
     # Get the tenants collection
     tenants = db.tenants
     # Release the table ID
-    logging.debug('Release table ID for overlay %s, tenant %s'
-                  % (overlayid, tenantid))
+    logging.debug(
+        'Release table ID for overlay %s, tenant %s', overlayid, tenantid
+    )
     success = None
     try:
         # Get the table ID assigned to the overlay
         tableid = get_tableid(overlayid, tenantid)
         if tableid is None:
-            logging.error('Error while getting table ID assigned to the '
-                          'overlay %s' % overlayid)
+            logging.error(
+                'Error while getting table ID assigned to the overlay %s',
+                overlayid
+            )
             success = False
         else:
             # Remove the table ID from the overlay
-            success = remove_tableid_from_overlay(
-                overlayid, tenantid, tableid)
+            success = remove_tableid_from_overlay(overlayid, tenantid, tableid)
             if success is not True:
-                logging.error('Error while removing table ID %s from the '
-                              'overlay %s' % (tableid, overlayid))
+                logging.error(
+                    'Error while removing table ID %s from the overlay %s',
+                    tableid,
+                    overlayid
+                )
                 success = False
             else:
                 # Get the overlay
@@ -2563,18 +2814,27 @@ def release_tableid(overlayid, tenantid):
                 if tenant is None:
                     logging.debug('The tenant does not exist')
                 else:
-                    reusable_tableids = tenant['counters']['tableid']['reusable_tableids']
+                    reusable_tableids = (
+                        tenant['counters']['tableid']['reusable_tableids']
+                    )
                     # Add the table ID to the reusable table IDs list
                     reusable_tableids.append(tableid)
                     update = {
-                        '$set': {'counters.tableid.reusable_tableids': reusable_tableids}}
+                        '$set': {
+                            'counters.tableid.reusable_tableids': (
+                                reusable_tableids
+                            )
+                        }
+                    }
                     if tenants.update_one(query, update).modified_count != 1:
                         logging.error(
-                            'Error while updating reusable table IDs list')
+                            'Error while updating reusable table IDs list'
+                        )
                         success = False
                     else:
                         logging.debug(
-                            'Table ID added to reusable_tableids list')
+                            'Table ID added to reusable_tableids list'
+                        )
                         success = True
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
@@ -2596,8 +2856,7 @@ def get_tableid(overlayid, tenantid):
     # Get the overlays collection
     overlays = db.overlays
     # Release the table ID
-    logging.debug('Get table ID for the overlay %s (%s)'
-                  % (overlayid, tenantid))
+    logging.debug('Get table ID for the overlay %s (%s)', overlayid, tenantid)
     tableid = None
     try:
         # Get the overlay
@@ -2625,8 +2884,11 @@ def assign_tableid_to_overlay(overlayid, tenantid, tableid):
     # Assign the table ID to the overlay
     success = None
     try:
-        logging.debug('Trying to assign the table ID %s to the overlay %s'
-                      % (tableid, overlayid))
+        logging.debug(
+            'Trying to assign the table ID %s to the overlay %s',
+            tableid,
+            overlayid
+        )
         # Build the update
         update = {'$set': {'tableid': tableid}}
         # Assign the table ID
@@ -2656,8 +2918,9 @@ def remove_tableid_from_overlay(overlayid, tenantid, tableid):
     # Set the table ID to null for the overlay
     success = None
     try:
-        logging.debug('Trying to remove the table ID from the overlay %s'
-                      % overlayid)
+        logging.debug(
+            'Trying to remove the table ID from the overlay %s', overlayid
+        )
         # Build the update
         update = {'$unset': {'tableid': 1}}
         # Remove the table ID
@@ -2686,8 +2949,7 @@ def get_new_mgmt_ipv4(deviceid):
     config = db.configuration
     # Get a new mgmt IP
     mgmtip = None
-    logging.debug('Getting new mgmt IPv4 for the tenant device %s'
-                  % deviceid)
+    logging.debug('Getting new mgmt IPv4 for the tenant device %s', deviceid)
     try:
         # Build the query
         query = {'config': 'mgmt_counters'}
@@ -2696,29 +2958,46 @@ def get_new_mgmt_ipv4(deviceid):
         if mgmt_counters is None:
             logging.debug('The tenant does not exist')
         else:
-            reusable_ipv4_addresses = mgmt_counters['mgmt_address_ipv4']['reusable_addrs']
+            reusable_ipv4_addresses = (
+                mgmt_counters['mgmt_address_ipv4']['reusable_addrs']
+            )
             if len(reusable_ipv4_addresses) > 0:
                 # Get a mgmt IP
                 mgmtip = reusable_ipv4_addresses.pop()
                 # Remove the mgmt IP from the reusable_ipv4_addresses list
                 update = {
-                    '$set': {'mgmt_address_ipv4.reusable_addrs': reusable_ipv4_addresses}}
+                    '$set': {
+                        'mgmt_address_ipv4.reusable_addrs': (
+                            reusable_ipv4_addresses
+                        )
+                    }
+                }
                 if config.update_one(query, update).modified_count != 1:
                     logging.error(
-                        'Error while updating reusable mgmt IPs list')
+                        'Error while updating reusable mgmt IPs list'
+                    )
                     mgmtip = None
             else:
                 # No reusable IPv4, allocate a new mgmt IPv4 address
                 net = IPv4Network(
-                    mgmt_counters['mgmt_address_ipv4']['mgmt_net'])
-                last_ip_index = mgmt_counters['mgmt_address_ipv4']['last_allocated_ip_index']
+                    mgmt_counters['mgmt_address_ipv4']['mgmt_net']
+                )
+                last_ip_index = mgmt_counters['mgmt_address_ipv4'][
+                    'last_allocated_ip_index'
+                ]
                 last_ip_index += 1
                 mgmtip = str(net[last_ip_index]) + '/' + str(net.prefixlen)
                 update = {
-                    '$set': {'mgmt_address_ipv4.last_allocated_ip_index': last_ip_index}}
+                    '$set': {
+                        'mgmt_address_ipv4.last_allocated_ip_index': (
+                            last_ip_index
+                        )
+                    }
+                }
                 if config.update_one(query, update).modified_count != 1:
                     logging.error(
-                        'Error while updating last_allocated_ip_index')
+                        'Error while updating last_allocated_ip_index'
+                    )
                     mgmtip = None
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
@@ -2740,8 +3019,9 @@ def get_new_mgmt_ipv6(deviceid):
     config = db.configuration
     # Get a new mgmt IP
     mgmtip = None
-    logging.debug('Getting new mgmt IPv6 for the tenant %s and device %s'
-                  % deviceid)
+    logging.debug(
+        'Getting new mgmt IPv6 for the tenant %s and device %s', deviceid
+    )
     try:
         # Build the query
         query = {'config': 'mgmt_counters'}
@@ -2750,29 +3030,46 @@ def get_new_mgmt_ipv6(deviceid):
         if mgmt_counters is None:
             logging.debug('The mgmt_counters does not exist')
         else:
-            reusable_ipv6_addresses = mgmt_counters['mgmt_address_ipv6']['reusable_addrs']
+            reusable_ipv6_addresses = (
+                mgmt_counters['mgmt_address_ipv6']['reusable_addrs']
+            )
             if len(reusable_ipv6_addresses) > 0:
                 # Get a mgmt IP
                 mgmtip = reusable_ipv6_addresses.pop()
                 # Remove the mgmt IP from the reusable_ipv6_addresses list
                 update = {
-                    '$set': {'counters.mgmt_address_ipv6.reusable_addrs': reusable_ipv6_addresses}}
+                    '$set': {
+                        'counters.mgmt_address_ipv6.reusable_addrs': (
+                            reusable_ipv6_addresses
+                        )
+                    }
+                }
                 if config.update_one(query, update).modified_count != 1:
                     logging.error(
-                        'Error while updating reusable mgmt IPs list')
+                        'Error while updating reusable mgmt IPs list'
+                    )
                     mgmtip = None
             else:
                 # No reusable IPv6, allocate a new mgmt IPv6 address
                 net = IPv6Network(
-                    mgmt_counters['mgmt_address_ipv6']['mgmt_net'])
-                last_ip_index = mgmt_counters['mgmt_address_ipv6']['last_allocated_ip_index']
+                    mgmt_counters['mgmt_address_ipv6']['mgmt_net']
+                )
+                last_ip_index = mgmt_counters['mgmt_address_ipv6'][
+                    'last_allocated_ip_index'
+                ]
                 last_ip_index += 1
                 mgmtip = str(net[last_ip_index]) + '/' + str(net.prefixlen)
                 update = {
-                    '$set': {'mgmt_address_ipv6.last_allocated_ip_index': last_ip_index}}
+                    '$set': {
+                        'mgmt_address_ipv6.last_allocated_ip_index': (
+                            last_ip_index
+                        )
+                    }
+                }
                 if config.update_one(query, update).modified_count != 1:
                     logging.error(
-                        'Error while updating last_allocated_ip_index')
+                        'Error while updating last_allocated_ip_index'
+                    )
                     mgmtip = None
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
@@ -2791,8 +3088,7 @@ def release_ipv4_address(deviceid, tenantid):
     # Get the configuration collection
     config = db.configuration
     # Release the IPv4 adddress
-    logging.debug('Release IPv4 address for device %s'
-                  % deviceid)
+    logging.debug('Release IPv4 address for device %s', deviceid)
     success = None
     try:
         # Find the device
@@ -2805,16 +3101,23 @@ def release_ipv4_address(deviceid, tenantid):
             if mgmt_counters is None:
                 logging.debug('The mgmt_counters does not exist')
             else:
-                reusable_addrs = mgmt_counters['mgmt_address_ipv4']['reusable_addrs']
-                prefixlen = mgmt_counters['mgmt_address_ipv4']['mgmt_net'].split(
-                    '/')[1]
+                reusable_addrs = (
+                    mgmt_counters['mgmt_address_ipv4']['reusable_addrs']
+                )
+                prefixlen = mgmt_counters['mgmt_address_ipv4'][
+                    'mgmt_net'
+                ].split('/')[1]
                 # Add the mgmt IPv4 to the reusable addresses list
                 reusable_addrs.append(mgmtip + '/' + str(prefixlen))
                 update = {
-                    '$set': {'mgmt_address_ipv4.reusable_addrs': reusable_addrs}}
+                    '$set': {
+                        'mgmt_address_ipv4.reusable_addrs': reusable_addrs
+                    }
+                }
                 if config.update_one(query, update).modified_count != 1:
                     logging.error(
-                        'Error while updating reusable mgmt IPs list')
+                        'Error while updating reusable mgmt IPs list'
+                    )
                     success = False
                 else:
                     logging.debug('Mgmt IP added to reusable_addrs list')
@@ -2840,8 +3143,7 @@ def release_ipv6_address(deviceid, tenantid):
     # Get the configuration collection
     config = db.configuration
     # Release the IPv6 adddress
-    logging.debug('Release IPv6 address device %s'
-                  % deviceid)
+    logging.debug('Release IPv6 address device %s', deviceid)
     success = None
     try:
         # Find the device
@@ -2854,16 +3156,23 @@ def release_ipv6_address(deviceid, tenantid):
             if mgmt_counters is None:
                 logging.debug('The mgmt_counters does not exist')
             else:
-                reusable_addrs = mgmt_counters['mgmt_address_ipv6']['reusable_addrs']
-                prefixlen = mgmt_counters['mgmt_address_ipv6']['mgmt_net'].split(
-                    '/')[1]
+                reusable_addrs = (
+                    mgmt_counters['mgmt_address_ipv6']['reusable_addrs']
+                )
+                prefixlen = mgmt_counters['mgmt_address_ipv6'][
+                    'mgmt_net'
+                ].split('/')[1]
                 # Add the mgmt IPv6 to the reusable addresses list
                 reusable_addrs.append(mgmtip + '/' + str(prefixlen))
                 update = {
-                    '$set': {'mgmt_address_ipv6.reusable_addrs': reusable_addrs}}
+                    '$set': {
+                        'mgmt_address_ipv6.reusable_addrs': reusable_addrs
+                    }
+                }
                 if config.update_one(query, update).modified_count != 1:
                     logging.error(
-                        'Error while updating reusable mgmt IPs list')
+                        'Error while updating reusable mgmt IPs list'
+                    )
                     success = False
                 else:
                     logging.debug('Mgmt IP added to reusable_addrs list')
@@ -2889,8 +3198,7 @@ def get_new_mgmt_ipv4_net(deviceid):
     config = db.configuration
     # Get a new mgmt net
     mgmtnet = None
-    logging.debug('Getting new mgmt IPv4 net for the device %s'
-                  % deviceid)
+    logging.debug('Getting new mgmt IPv4 net for the device %s', deviceid)
     try:
         # Build the query
         query = {'config': 'mgmt_counters'}
@@ -2899,30 +3207,48 @@ def get_new_mgmt_ipv4_net(deviceid):
         if mgmt_counters is None:
             logging.debug('The mgmt_counters does not exist')
         else:
-            reusable_ipv4_nets = mgmt_counters['mgmt_subnet_ipv4']['reusable_subnets']
+            reusable_ipv4_nets = (
+                mgmt_counters['mgmt_subnet_ipv4']['reusable_subnets']
+            )
             if len(reusable_ipv4_nets) > 0:
                 # Get a mgmt net
                 mgmtnet = reusable_ipv4_nets.pop()
                 # Remove the mgmt net from the reusable_ipv4_nets list
                 update = {
-                    '$set': {'counters.mgmt_subnet_ipv4.reusable_nets': reusable_ipv4_nets}}
+                    '$set': {
+                        'counters.mgmt_subnet_ipv4.reusable_nets': (
+                            reusable_ipv4_nets
+                        )
+                    }
+                }
                 if config.update_one(query, update).modified_count != 1:
                     logging.error(
-                        'Error while updating reusable mgmt nets list')
+                        'Error while updating reusable mgmt nets list'
+                    )
                     mgmtnet = None
             else:
                 # No reusable IPv4, allocate a new mgmt IPv4 net
                 net = IPv4Network(
-                    mgmt_counters['mgmt_subnet_ipv4']['mgmt_net'])
-                last_subnet_index = mgmt_counters['mgmt_subnet_ipv4']['last_allocated_subnet_index']
+                    mgmt_counters['mgmt_subnet_ipv4']['mgmt_net']
+                )
+                last_subnet_index = mgmt_counters['mgmt_subnet_ipv4'][
+                    'last_allocated_subnet_index'
+                ]
                 last_subnet_index += 1
                 mgmtnet = str(next(itertools.islice(
-                    net.subnets(new_prefix=30), last_subnet_index, None)))
+                    net.subnets(new_prefix=30), last_subnet_index, None
+                )))
                 update = {
-                    '$set': {'mgmt_subnet_ipv4.last_allocated_subnet_index': last_subnet_index}}
+                    '$set': {
+                        'mgmt_subnet_ipv4.last_allocated_subnet_index': (
+                            last_subnet_index
+                        )
+                    }
+                }
                 if config.update_one(query, update).modified_count != 1:
                     logging.error(
-                        'Error while updating last_allocated_subnet_index')
+                        'Error while updating last_allocated_subnet_index'
+                    )
                     mgmtnet = None
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
@@ -2941,8 +3267,7 @@ def get_new_mgmt_ipv6_net(deviceid):
     config = db.configuration
     # Get a new mgmt net
     mgmtnet = None
-    logging.debug('Getting new mgmt IPv6 net for the device %s'
-                  % deviceid)
+    logging.debug('Getting new mgmt IPv6 net for the device %s', deviceid)
     try:
         # Build the query
         query = {'config': 'mgmt_counters'}
@@ -2951,30 +3276,48 @@ def get_new_mgmt_ipv6_net(deviceid):
         if mgmt_counters is None:
             logging.debug('The mgmt_counters does not exist')
         else:
-            reusable_ipv6_nets = mgmt_counters['mgmt_subnet_ipv6']['reusable_subnets']
+            reusable_ipv6_nets = (
+                mgmt_counters['mgmt_subnet_ipv6']['reusable_subnets']
+            )
             if len(reusable_ipv6_nets) > 0:
                 # Get a mgmt net
                 mgmtnet = reusable_ipv6_nets.pop()
                 # Remove the mgmt net from the reusable_ipv6_nets list
                 update = {
-                    '$set': {'counters.mgmt_subnet_ipv6.reusable_nets': reusable_ipv6_nets}}
+                    '$set': {
+                        'counters.mgmt_subnet_ipv6.reusable_nets': (
+                            reusable_ipv6_nets
+                        )
+                    }
+                }
                 if config.update_one(query, update).modified_count != 1:
                     logging.error(
-                        'Error while updating reusable mgmt nets list')
+                        'Error while updating reusable mgmt nets list'
+                    )
                     mgmtnet = None
             else:
                 # No reusable IPv6, allocate a new mgmt IPv6 net
                 net = IPv4Network(
-                    mgmt_counters['mgmt_subnet_ipv6']['mgmt_net'])
-                last_subnet_index = mgmt_counters['mgmt_subnet_ipv6']['last_allocated_subnet_index']
+                    mgmt_counters['mgmt_subnet_ipv6']['mgmt_net']
+                )
+                last_subnet_index = mgmt_counters['mgmt_subnet_ipv6'][
+                    'last_allocated_subnet_index'
+                ]
                 last_subnet_index += 1
                 mgmtnet = str(next(itertools.islice(
-                    net.subnets(new_prefix=30), last_subnet_index, None)))
+                    net.subnets(new_prefix=30), last_subnet_index, None
+                )))
                 update = {
-                    '$set': {'mgmt_subnet_ipv6.last_allocated_subnet_index': last_subnet_index}}
+                    '$set': {
+                        'mgmt_subnet_ipv6.last_allocated_subnet_index': (
+                            last_subnet_index
+                        )
+                    }
+                }
                 if config.update_one(query, update).modified_count != 1:
                     logging.error(
-                        'Error while updating last_allocated_subnet_index')
+                        'Error while updating last_allocated_subnet_index'
+                    )
                     mgmtnet = None
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
@@ -2993,7 +3336,7 @@ def release_ipv4_net(deviceid, tenantid):
     # Get the configuration collection
     config = db.configuration
     # Release the IPv4 net
-    logging.debug('Release IPv4 for device %s' % deviceid)
+    logging.debug('Release IPv4 for device %s', deviceid)
     success = None
     try:
         # Find the device
@@ -3006,14 +3349,22 @@ def release_ipv4_net(deviceid, tenantid):
             if mgmt_counters is None:
                 logging.debug('The mgmt_counters does not exist')
             else:
-                reusable_nets = mgmt_counters['mgmt_subnet_ipv4']['reusable_subnets']
+                reusable_nets = (
+                    mgmt_counters['mgmt_subnet_ipv4']['reusable_subnets']
+                )
                 # Add the mgmt IPv4 to the reusable nets list
-                reusable_nets.append(IPv4Interface(mgmtip + '/30').network)
+                reusable_nets.append(
+                    str(IPv4Interface(mgmtip + '/30').network)
+                )
                 update = {
-                    '$set': {'mgmt_subnet_ipv4.reusable_nets': reusable_nets}}
+                    '$set': {
+                        'mgmt_subnet_ipv4.reusable_nets': reusable_nets
+                    }
+                }
                 if config.update_one(query, update).modified_count != 1:
                     logging.error(
-                        'Error while updating reusable mgmt IPs list')
+                        'Error while updating reusable mgmt IPs list'
+                    )
                     success = False
                 else:
                     logging.debug('Mgmt IP added to reusable_nets list')
@@ -3039,8 +3390,9 @@ def release_ipv6_net(deviceid, tenantid):
     # Get the configuration collection
     config = db.configuration
     # Release the IPv6 net
-    logging.debug('Release IPv6 net for device %s and tenant %s'
-                  % (deviceid, tenantid))
+    logging.debug(
+        'Release IPv6 net for device %s and tenant %s', deviceid, tenantid
+    )
     success = None
     try:
         # Find the device
@@ -3053,11 +3405,16 @@ def release_ipv6_net(deviceid, tenantid):
             if mgmt_counters is None:
                 logging.debug('The mgmt_counters does not exist')
             else:
-                reusable_nets = mgmt_counters['mgmt_subnet_ipv6']['reusable_subnets']
+                reusable_nets = (
+                    mgmt_counters['mgmt_subnet_ipv6']['reusable_subnets']
+                )
                 # Add the mgmt IPv6 to the reusable nets list
                 reusable_nets.append(IPv6Interface(mgmtip + '/30').network)
                 update = {
-                    '$set': {'mgmt_subnet_ipv6.reusable_nets': reusable_nets}}
+                    '$set': {
+                        'mgmt_subnet_ipv6.reusable_nets': reusable_nets
+                    }
+                }
                 if config.update_one(query, update).modified_count != 1:
                     logging.error(
                         'Error while updating reusable mgmt IPs list')
@@ -3088,8 +3445,8 @@ def get_device_mgmtip(tenantid, deviceid):
     # Get the devices collection
     devices = db.devices
     # Get management IP of device
-    logging.debug('Getting management IP of device %s (tenant %s)'
-                  % (deviceid, tenantid))
+    logging.debug(
+        'Getting management IP of device %s (tenant %s)', deviceid, tenantid)
     mgmtip = None
     try:
         # Get the device
@@ -3106,7 +3463,7 @@ def get_device_mgmtip(tenantid, deviceid):
 
 # Device authentication
 def authenticate_device(token):
-    tenantid = get_tenantid(token)
+    # tenantid = get_tenantid(token)
     # return tenantid is not None, tenantid      # TODO for the future...
     return True, '1'
 
@@ -3122,39 +3479,99 @@ def get_new_vni(overlay_name, tenantid):
     # Get tenants collection
     tenants = db.tenants
     # The overlay of the considered tenant already has a VNI
-    if overlays.find_one({'name': overlay_name, 'tenantid': tenantid}, {'vni': 1})['vni'] != None:
+    if overlays.find_one(
+        {
+            'name': overlay_name,
+            'tenantid': tenantid
+        },
+        {
+            'vni': 1
+        }
+    )['vni'] is not None:
         return -1
     # Overlay does not have a VNI
     else:
         # Check if a reusable VNI is available
-        if not tenants.find_one({'tenantid': tenantid, 'reu_vni': {'$size': 0}}):
+        if not tenants.find_one(
+            {
+                'tenantid': tenantid,
+                'reu_vni': {
+                    '$size': 0
+                }
+            }
+        ):
             # Pop vni from the array
-            vnis = tenants.find_one({
-                'tenantid': tenantid})['reu_vni']
+            vnis = tenants.find_one({'tenantid': tenantid})['reu_vni']
             vni = vnis.pop()
-            tenants.find_one_and_update({
-                'tenantid': tenantid}, {'$set': {'reu_vni': vnis}})
+            tenants.find_one_and_update(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    '$set': {
+                        'reu_vni': vnis
+                    }
+                }
+            )
         else:
             # If not, get a new VNI
-            tenants.find_one_and_update({
-                'tenantid': tenantid}, {'$inc': {'vni_index': +1}})
-            while tenants.find_one({'tenantid': tenantid}, {'vni_index': 1})['vni_index'] in RESERVED_VNI:
+            tenants.find_one_and_update(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    '$inc': {
+                        'vni_index': +1
+                    }
+                }
+            )
+            while tenants.find_one(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    'vni_index': 1
+                }
+            )['vni_index'] in RESERVED_VNI:
                 # Skip reserved VNI
-                tenants.find_one_and_update({
-                    'tenantid': tenantid}, {'$inc': {'vni_index': +1}})
+                tenants.find_one_and_update(
+                    {
+                        'tenantid': tenantid
+                    },
+                    {
+                        '$inc': {
+                            'vni_index': +1
+                        }
+                    }
+                )
             # Get VNI
-            vni = tenants.find_one({
-                'tenantid': tenantid}, {'vni_index': 1})['vni_index']
+            vni = tenants.find_one(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    'vni_index': 1
+                }
+            )['vni_index']
         # Assign the VNI to the overlay
-        overlays.find_one_and_update({
-            'tenantid': tenantid,
-            'name': overlay_name}, {
-            '$set': {'vni': vni}
-        }
+        overlays.find_one_and_update(
+            {
+                'tenantid': tenantid,
+                'name': overlay_name
+            },
+            {
+                '$set': {'vni': vni}
+            }
         )
         # Increase assigned VNIs counter
-        tenants.find_one_and_update({
-            'tenantid': tenantid}, {'$inc': {'assigned_vni': +1}})
+        tenants.find_one_and_update(
+            {
+                'tenantid': tenantid
+            },
+            {
+                '$inc': {'assigned_vni': +1}
+            }
+        )
         # And return
         return vni
 
@@ -3169,9 +3586,14 @@ def get_vni(overlay_name, tenantid):
     # Get overlays collection
     overlays = db.overlays
     # Get VNI
-    vni = overlays.find_one({
-        'name': overlay_name, 'tenantid': tenantid}, {'vni': 1})['vni']
-    if vni == None:
+    vni = overlays.find_one(
+        {
+            'name': overlay_name,
+            'tenantid': tenantid
+        },
+        {'vni': 1}
+    )['vni']
+    if vni is None:
         return -1
     else:
         return vni
@@ -3188,31 +3610,74 @@ def release_vni(overlay_name, tenantid):
     # Get tenants collection
     tenants = db.tenants
     # Check if the overlay has an associated VNI
-    vni = overlays.find_one({
-        'name': overlay_name, 'tenantid': tenantid}, {'vni': 1})['vni']
-    # If VNI is valid
-    if vni != None:
-        # Unassign the VNI
-        overlays.find_one_and_update({
-            'tenantid': tenantid,
-            'name': overlay_name}, {
-            '$set': {'vni': None}
+    vni = overlays.find_one(
+        {
+            'name': overlay_name,
+            'tenantid': tenantid
+        },
+        {
+            'vni': 1
         }
+    )['vni']
+    # If VNI is valid
+    if vni is not None:
+        # Unassign the VNI
+        overlays.find_one_and_update(
+            {
+                'tenantid': tenantid,
+                'name': overlay_name
+            },
+            {
+                '$set': {'vni': None}
+            }
         )
         # Decrease assigned VNIs counter
-        tenants.find_one_and_update({
-            'tenantid': tenantid}, {'$inc': {'assigned_vni': -1}})
+        tenants.find_one_and_update(
+            {
+                'tenantid': tenantid
+            },
+            {
+                '$inc': {
+                    'assigned_vni': -1
+                }
+            }
+        )
         # Mark the VNI as reusable
-        tenants.update_one({
-            'tenantid': tenantid}, {'$push': {'reu_vni': vni}})
+        tenants.update_one(
+            {
+                'tenantid': tenantid
+            },
+            {
+                '$push': {'reu_vni': vni}
+            }
+        )
         # If the tenant has no overlays
-        if tenants.find_one({'tenantid': tenantid}, {'assigned_vni': 1})['assigned_vni'] == 0:
+        if tenants.find_one(
+            {
+                'tenantid': tenantid
+            },
+            {
+                'assigned_vni': 1
+            }
+        )['assigned_vni'] == 0:
             # reset counter
-            tenants.find_one_and_update({
-                'tenantid': tenantid}, {'$set': {'vni_index': -1}})
+            tenants.find_one_and_update(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    '$set': {'vni_index': -1}
+                }
+            )
             # empty reusable VNI list
-            tenants.find_one_and_update({
-                'tenantid': tenantid}, {'$set': {'reu_vni': []}})
+            tenants.find_one_and_update(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    '$set': {'reu_vni': []}
+                }
+            )
         return vni
     else:
         # The overlay has not associated VNI
@@ -3232,40 +3697,96 @@ def get_new_vtep_ip(dev_id, tenantid):
     ip = IPv4Network('198.18.0.0/16')
     network_mask = 16
     # The device of the considered tenant already has an associated VTEP IP
-    if devices.find_one({'deviceid': dev_id, 'tenantid': tenantid}, {'vtep_ip_addr': 1})['vtep_ip_addr'] != None:
+    if devices.find_one(
+        {
+            'deviceid': dev_id,
+            'tenantid': tenantid
+        },
+        {
+            'vtep_ip_addr': 1
+        }
+    )['vtep_ip_addr'] is not None:
         return -1
     # The device does not have a VTEP IP address
     else:
         # Check if a reusable VTEP IP is available
-        if not tenants.find_one({'tenantid': tenantid, 'reu_vtep_ip_addr': {'$size': 0}}):
+        if not tenants.find_one(
+            {
+                'tenantid': tenantid,
+                'reu_vtep_ip_addr': {'$size': 0}
+            }
+        ):
             # Pop VTEP IP adress from the array
-            vtep_ips = tenants.find_one({
-                'tenantid': tenantid})['reu_vtep_ip_addr']
+            vtep_ips = tenants.find_one(
+                {
+                    'tenantid': tenantid
+                }
+            )['reu_vtep_ip_addr']
             vtep_ip = vtep_ips.pop()
-            tenants.find_one_and_update({
-                'tenantid': tenantid}, {'$set': {'reu_vtep_ip_addr': vtep_ips}})
+            tenants.find_one_and_update(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    '$set': {'reu_vtep_ip_addr': vtep_ips}
+                }
+            )
         else:
             # If not, get a VTEP IP address
-            tenants.find_one_and_update({
-                'tenantid': tenantid}, {'$inc': {'vtep_ip_index': +1}})
-            while tenants.find_one({'tenantid': tenantid}, {'vtep_ip_index': 1})['vtep_ip_index'] in RESERVED_VTEP_IP:
+            tenants.find_one_and_update(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    '$inc': {'vtep_ip_index': +1}
+                }
+            )
+            while tenants.find_one(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    'vtep_ip_index': 1
+                }
+            )['vtep_ip_index'] in RESERVED_VTEP_IP:
                 # Skip reserved VTEP IP address
-                tenants.find_one_and_update({
-                    'tenantid': tenantid}, {'$inc': {'vtep_ip_index': +1}})
+                tenants.find_one_and_update(
+                    {
+                        'tenantid': tenantid
+                    },
+                    {
+                        '$inc': {'vtep_ip_index': +1}
+                    }
+                )
             # Get IP address
-            ip_index = tenants.find_one({
-                'tenantid': tenantid}, {'vtep_ip_index': 1})['vtep_ip_index']
+            ip_index = tenants.find_one(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    'vtep_ip_index': 1
+                }
+            )['vtep_ip_index']
             vtep_ip = "%s/%s" % (ip[ip_index], network_mask)
         # Assign the VTEP IP address to the device
-        devices.find_one_and_update({
-            'tenantid': tenantid,
-            'deviceid': dev_id}, {
-            '$set': {'vtep_ip_addr': vtep_ip}
-        }
+        devices.find_one_and_update(
+            {
+                'tenantid': tenantid,
+                'deviceid': dev_id
+            },
+            {
+                '$set': {'vtep_ip_addr': vtep_ip}
+            }
         )
         # Increase assigned VTEP IP addr counter
-        tenants.find_one_and_update({
-            'tenantid': tenantid}, {'$inc': {'assigned_vtep_ip_addr': +1}})
+        tenants.find_one_and_update(
+            {
+                'tenantid': tenantid
+            },
+            {
+                '$inc': {'assigned_vtep_ip_addr': +1}
+            }
+        )
         # And return
         return vtep_ip
 
@@ -3283,29 +3804,76 @@ def get_new_vtep_ipv6(dev_id, tenantid):
     ip = IPv6Network('fc00::/64')
     network_mask = 64
     # The device of the considered tenant already has an associated VTEP IP
-    if devices.find_one({'deviceid': dev_id, 'tenantid': tenantid}, {'vtep_ipv6_addr': 1})['vtep_ipv6_addr'] != None:
+    if devices.find_one(
+        {
+            'deviceid': dev_id,
+            'tenantid': tenantid
+        },
+        {
+            'vtep_ipv6_addr': 1
+        }
+    )['vtep_ipv6_addr'] is not None:
         return -1
     # The device does not have a VTEP IP address
     else:
         # Check if a reusable VTEP IP is available
-        if not tenants.find_one({'tenantid': tenantid, 'reu_vtep_ipv6_addr': {'$size': 0}}):
+        if not tenants.find_one(
+            {
+                'tenantid': tenantid,
+                'reu_vtep_ipv6_addr': {'$size': 0}
+            }
+        ):
             # Pop VTEP IP adress from the array
-            vtep_ips = tenants.find_one({
-                'tenantid': tenantid})['reu_vtep_ipv6_addr']
+            vtep_ips = tenants.find_one(
+                {
+                    'tenantid': tenantid
+                }
+            )['reu_vtep_ipv6_addr']
             vtep_ip = vtep_ips.pop()
-            tenants.find_one_and_update({
-                'tenantid': tenantid}, {'$set': {'reu_vtep_ipv6_addr': vtep_ips}})
+            tenants.find_one_and_update(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    '$set': {'reu_vtep_ipv6_addr': vtep_ips}
+                }
+            )
         else:
             # If not, get a VTEP IP address
-            tenants.find_one_and_update({
-                'tenantid': tenantid}, {'$inc': {'vtep_ipv6_index': +1}})
-            while tenants.find_one({'tenantid': tenantid}, {'vtep_ipv6_index': 1})['vtep_ipv6_index'] in RESERVED_VTEP_IPV6:
+            tenants.find_one_and_update(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    '$inc': {'vtep_ipv6_index': +1}
+                }
+            )
+            while tenants.find_one(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    'vtep_ipv6_index': 1
+                }
+            )['vtep_ipv6_index'] in RESERVED_VTEP_IPV6:
                 # Skip reserved VTEP IP address
-                tenants.find_one_and_update({
-                    'tenantid': tenantid}, {'$inc': {'vtep_ipv6_index': +1}})
+                tenants.find_one_and_update(
+                    {
+                        'tenantid': tenantid
+                    },
+                    {
+                        '$inc': {'vtep_ipv6_index': +1}
+                    }
+                )
             # Get IP address
-            ip_index = tenants.find_one({
-                'tenantid': tenantid}, {'vtep_ipv6_index': 1})['vtep_ipv6_index']
+            ip_index = tenants.find_one(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    'vtep_ipv6_index': 1
+                }
+            )['vtep_ipv6_index']
             vtep_ip = "%s/%s" % (ip[ip_index], network_mask)
         # Assign the VTEP IP address to the device
         devices.find_one_and_update({
@@ -3315,8 +3883,14 @@ def get_new_vtep_ipv6(dev_id, tenantid):
         }
         )
         # Increase assigned VTEP IP addr counter
-        tenants.find_one_and_update({
-            'tenantid': tenantid}, {'$inc': {'assigned_vtep_ipv6_addr': +1}})
+        tenants.find_one_and_update(
+            {
+                'tenantid': tenantid
+            },
+            {
+                '$inc': {'assigned_vtep_ipv6_addr': +1}
+            }
+        )
         # And return
         return vtep_ip
 
@@ -3331,9 +3905,16 @@ def get_vtep_ip(dev_id, tenantid):
     # Devices collection
     devices = db.devices
     # Get VTEP IP
-    vtep_ip = devices.find_one({
-        'deviceid': dev_id, 'tenantid': tenantid}, {'vtep_ip_addr': 1})['vtep_ip_addr']
-    if vtep_ip == None:
+    vtep_ip = devices.find_one(
+        {
+            'deviceid': dev_id,
+            'tenantid': tenantid
+        },
+        {
+            'vtep_ip_addr': 1
+        }
+    )['vtep_ip_addr']
+    if vtep_ip is None:
         return -1
     else:
         return vtep_ip
@@ -3349,9 +3930,16 @@ def get_vtep_ipv6(dev_id, tenantid):
     # Devices collection
     devices = db.devices
     # Get VTEP IP
-    vtep_ip = devices.find_one({
-        'deviceid': dev_id, 'tenantid': tenantid}, {'vtep_ipv6_addr': 1})['vtep_ipv6_addr']
-    if vtep_ip == None:
+    vtep_ip = devices.find_one(
+        {
+            'deviceid': dev_id,
+            'tenantid': tenantid
+        },
+        {
+            'vtep_ipv6_addr': 1
+        }
+    )['vtep_ipv6_addr']
+    if vtep_ip is None:
         return -1
     else:
         return vtep_ip
@@ -3368,31 +3956,72 @@ def release_vtep_ip(dev_id, tenantid):
     # Tenants collection
     tenants = db.tenants
     # Get device VTEP IP address
-    vtep_ip = devices.find_one({
-        'deviceid': dev_id, 'tenantid': tenantid}, {'vtep_ip_addr': 1})['vtep_ip_addr']
-    # If IP address is valid
-    if vtep_ip != None:
-        # Unassign the VTEP IP addr
-        devices.find_one_and_update({
-            'tenantid': tenantid,
-            'deviceid': dev_id}, {
-            '$set': {'vtep_ip_addr': None}
+    vtep_ip = devices.find_one(
+        {
+            'deviceid': dev_id,
+            'tenantid': tenantid
+        },
+        {
+            'vtep_ip_addr': 1
         }
+    )['vtep_ip_addr']
+    # If IP address is valid
+    if vtep_ip is not None:
+        # Unassign the VTEP IP addr
+        devices.find_one_and_update(
+            {
+                'tenantid': tenantid,
+                'deviceid': dev_id
+            },
+            {
+                '$set': {'vtep_ip_addr': None}
+            }
         )
         # Decrease assigned VTEP IP addr counter
-        tenants.find_one_and_update({
-            'tenantid': tenantid}, {'$inc': {'assigned_vtep_ip_addr': -1}})
+        tenants.find_one_and_update(
+            {
+                'tenantid': tenantid
+            },
+            {
+                '$inc': {'assigned_vtep_ip_addr': -1}
+            }
+        )
         # Mark the VTEP IP addr as reusable
-        tenants.update_one({
-            'tenantid': tenantid}, {'$push': {'reu_vtep_ip_addr': vtep_ip}})
+        tenants.update_one(
+            {
+                'tenantid': tenantid
+            },
+            {
+                '$push': {'reu_vtep_ip_addr': vtep_ip}
+            }
+        )
         # If all addresses have been released
-        if tenants.find_one({'tenantid': tenantid}, {'assigned_vtep_ip_addr': 1})['assigned_vtep_ip_addr'] == 0:
+        if tenants.find_one(
+            {
+                'tenantid': tenantid
+            },
+            {
+                'assigned_vtep_ip_addr': 1
+            }
+        )['assigned_vtep_ip_addr'] == 0:
             # reset the counter
-            tenants.find_one_and_update({
-                'tenantid': tenantid}, {'$set': {'vtep_ip_index': -1}})
+            tenants.find_one_and_update(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    '$set': {'vtep_ip_index': -1}
+                }
+            )
             # empty reusable address list
-            tenants.find_one_and_update({
-                'tenantid': tenantid}, {'$set': {'reu_vtep_ip_addr': []}})
+            tenants.find_one_and_update(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    '$set': {'reu_vtep_ip_addr': []}
+                }
+            )
         # Return the VTEP IP
         return vtep_ip
     else:
@@ -3411,31 +4040,72 @@ def release_vtep_ipv6(dev_id, tenantid):
     # Tenants collection
     tenants = db.tenants
     # Get device VTEP IP address
-    vtep_ip = devices.find_one({
-        'deviceid': dev_id, 'tenantid': tenantid}, {'vtep_ipv6_addr': 1})['vtep_ipv6_addr']
-    # If IP address is valid
-    if vtep_ip != None:
-        # Unassign the VTEP IP addr
-        devices.find_one_and_update({
-            'tenantid': tenantid,
-            'deviceid': dev_id}, {
-            '$set': {'vtep_ipv6_addr': None}
+    vtep_ip = devices.find_one(
+        {
+            'deviceid': dev_id,
+            'tenantid': tenantid
+        },
+        {
+            'vtep_ipv6_addr': 1
         }
+    )['vtep_ipv6_addr']
+    # If IP address is valid
+    if vtep_ip is not None:
+        # Unassign the VTEP IP addr
+        devices.find_one_and_update(
+            {
+                'tenantid': tenantid,
+                'deviceid': dev_id
+            },
+            {
+                '$set': {'vtep_ipv6_addr': None}
+            }
         )
         # Decrease assigned VTEP IP addr counter
-        tenants.find_one_and_update({
-            'tenantid': tenantid}, {'$inc': {'assigned_vtep_ipv6_addr': -1}})
+        tenants.find_one_and_update(
+            {
+                'tenantid': tenantid
+            },
+            {
+                '$inc': {'assigned_vtep_ipv6_addr': -1}
+            }
+        )
         # Mark the VTEP IP addr as reusable
-        tenants.update_one({
-            'tenantid': tenantid}, {'$push': {'reu_vtep_ipv6_addr': vtep_ip}})
+        tenants.update_one(
+            {
+                'tenantid': tenantid
+            },
+            {
+                '$push': {'reu_vtep_ipv6_addr': vtep_ip}
+            }
+        )
         # If all addresses have been released
-        if tenants.find_one({'tenantid': tenantid}, {'assigned_vtep_ipv6_addr': 1})['assigned_vtep_ipv6_addr'] == 0:
+        if tenants.find_one(
+            {
+                'tenantid': tenantid
+            },
+            {
+                'assigned_vtep_ipv6_addr': 1
+            }
+        )['assigned_vtep_ipv6_addr'] == 0:
             # reset the counter
-            tenants.find_one_and_update({
-                'tenantid': tenantid}, {'$set': {'vtep_ipv6_index': -1}})
+            tenants.find_one_and_update(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    '$set': {'vtep_ipv6_index': -1}
+                }
+            )
             # empty reusable address list
-            tenants.find_one_and_update({
-                'tenantid': tenantid}, {'$set': {'reu_vtep_ipv6_addr': []}})
+            tenants.find_one_and_update(
+                {
+                    'tenantid': tenantid
+                },
+                {
+                    '$set': {'reu_vtep_ipv6_addr': []}
+                }
+            )
         # Return the VTEP IP
         return vtep_ip
     else:
@@ -3451,24 +4121,70 @@ def add_tunnel_to_overlay(overlayid, ldeviceid, rdeviceid, tenantid):
     # Overlays collection
     overlays = db.overlays
     # Check if a reusable tunnel ID is available
-    if not overlays.find_one({'_id': ObjectId(overlayid), 'tenantid': tenantid, 'counters.reusable_tunnelid': {'$size': 0}}):
+    if not overlays.find_one(
+        {
+            '_id': ObjectId(overlayid),
+            'tenantid': tenantid,
+            'counters.reusable_tunnelid': {'$size': 0}
+        }
+    ):
         # Pop tunnel ID from the array
-        tunnelid_array = overlays.find_one({
-            '_id': ObjectId(overlayid), 'tenantid': tenantid})['counters']['reusable_tunnelid']
-        tunnelid = iptunnelid_array.pop()
-        overlays.find_one_and_update({
-            '_id': ObjectId(overlayid), 'tenantid': tenantid}, {'$set': {'counters.reusable_tunnelid': tunnelid_array}})
+        tunnelid_array = overlays.find_one(
+            {
+                '_id': ObjectId(overlayid),
+                'tenantid': tenantid
+            }
+        )['counters']['reusable_tunnelid']
+        tunnelid = tunnelid_array.pop()
+        overlays.find_one_and_update(
+            {
+                '_id': ObjectId(overlayid),
+                'tenantid': tenantid
+            },
+            {
+                '$set': {'counters.reusable_tunnelid': tunnelid_array}
+            }
+        )
     else:
         # If not, get a tunnel ID
-        overlays.find_one_and_update({
-            '_id': ObjectId(overlayid), 'tenantid': tenantid}, {'$inc': {'counters.last_tunnelid': +1}})
-        while overlays.find_one({'_id': ObjectId(overlayid), 'tenantid': tenantid}, {'counters.last_tunnelid': 1})['counters']['last_tunnelid'] in RESERVED_TUNNELID:
+        overlays.find_one_and_update(
+            {
+                '_id': ObjectId(overlayid),
+                'tenantid': tenantid
+            },
+            {
+                '$inc': {'counters.last_tunnelid': +1}
+            }
+        )
+        while overlays.find_one(
+            {
+                '_id': ObjectId(overlayid),
+                'tenantid': tenantid
+            },
+            {
+                'counters.last_tunnelid': 1
+            }
+        )['counters']['last_tunnelid'] in RESERVED_TUNNELID:
             # Skip reserved tunnel IDs
-            overlays.find_one_and_update({
-                '_id': ObjectId(overlayid), 'tenantid': tenantid}, {'$inc': {'counters.last_tunnelid': +1}})
+            overlays.find_one_and_update(
+                {
+                    '_id': ObjectId(overlayid),
+                    'tenantid': tenantid
+                },
+                {
+                    '$inc': {'counters.last_tunnelid': +1}
+                }
+            )
         # Get tunnel ID
-        tunnelid = overlays.find_one({
-            '_id': ObjectId(overlayid), 'tenantid': tenantid}, {'counters.last_tunnelid': 1})['counters']['last_tunnelid']
+        tunnelid = overlays.find_one(
+            {
+                '_id': ObjectId(overlayid),
+                'tenantid': tenantid
+            },
+            {
+                'counters.last_tunnelid': 1
+            }
+        )['counters']['last_tunnelid']
     tunnel_name = 'tnl' + str(tunnelid)
     new_tunnel = {
         'tunnelid': tunnelid,
@@ -3477,10 +4193,14 @@ def add_tunnel_to_overlay(overlayid, ldeviceid, rdeviceid, tenantid):
         'tunnel_name': tunnel_name
     }
     # Assign the VTEP IP address to the device
-    overlays.find_one_and_update({
-        'tenantid': tenantid,
-        '_id': ObjectId(overlayid)},
-        {'$push': {'tunnels': new_tunnel}}
+    overlays.find_one_and_update(
+        {
+            'tenantid': tenantid,
+            '_id': ObjectId(overlayid)
+        },
+        {
+            '$push': {'tunnels': new_tunnel}
+        }
     )
     # And return
     return new_tunnel
@@ -3496,7 +4216,7 @@ def get_tunnel(overlayid, ldeviceid, rdeviceid, tenantid):
     # Get the overlays collection
     overlays = db.overlays
     # Get the tunnel
-    logging.debug('Get tunnel for the overlay %s (%s)' % (overlayid, tenantid))
+    logging.debug('Get tunnel for the overlay %s (%s)', overlayid, tenantid)
     tunnel = None
     try:
         # Get the overlay
@@ -3507,7 +4227,10 @@ def get_tunnel(overlayid, ldeviceid, rdeviceid, tenantid):
             logging.error('No tunnels array available for the overlay')
         else:
             for _tunnel in tunnels:
-                if _tunnel['ldeviceid'] == ldeviceid and _tunnel['rdeviceid'] == rdeviceid:
+                if (
+                    _tunnel['ldeviceid'] == ldeviceid
+                    and _tunnel['rdeviceid'] == rdeviceid
+                ):
                     tunnel = _tunnel
                     break
     except pymongo.errors.ServerSelectionTimeoutError:
@@ -3530,29 +4253,45 @@ def remove_tunnel_from_overlay(overlayid, ldeviceid, rdeviceid, tenantid):
     if tunnel is not None:
         tunnelid = tunnel['tunnelid']
         # Get the overlay
-        overlay = overlays.find_one({
-            'tenantid': tenantid,
-            '_id': ObjectId(overlayid)}
+        overlay = overlays.find_one(
+            {
+                'tenantid': tenantid,
+                '_id': ObjectId(overlayid)
+            }
         )
         # Remove the tunnel from the overlay
         tunnels = overlay['tunnels']
         for i in range(len(tunnels)):
             _tunnel = tunnels[i]
-            if _tunnel['ldeviceid'] == ldeviceid and _tunnel['rdeviceid'] == rdeviceid:
+            if (
+                _tunnel['ldeviceid'] == ldeviceid
+                and _tunnel['rdeviceid'] == rdeviceid
+            ):
                 tunnel = _tunnel
                 break
         if tunnel is None:
             logging.error('Tunnel not found')
             return None
         del tunnels[i]
-        overlays.find_one_and_update({
-            'tenantid': tenantid,
-            '_id': ObjectId(overlayid)}, {
-            '$set': {'tunnels': tunnels}
-        })
+        overlays.find_one_and_update(
+            {
+                'tenantid': tenantid,
+                '_id': ObjectId(overlayid)
+            },
+            {
+                '$set': {'tunnels': tunnels}
+            }
+        )
         # Mark the tunnel ID as reusable
-        overlays.update_one({
-            '_id': ObjectId(overlayid), 'tenantid': tenantid}, {'$push': {'counters.reusable_tunnelid': tunnelid}})
+        overlays.update_one(
+            {
+                '_id': ObjectId(overlayid),
+                'tenantid': tenantid
+            },
+            {
+                '$push': {'counters.reusable_tunnelid': tunnelid}
+            }
+        )
         # Return the tunnel
         return tunnel
     else:
@@ -3561,7 +4300,8 @@ def remove_tunnel_from_overlay(overlayid, ldeviceid, rdeviceid, tenantid):
         return -1
 
 
-# Get the counter of reconciliation failures for a device and increase the counter
+# Get the counter of reconciliation failures for a device and increase the
+# counter
 def inc_and_get_reconciliation_failures(tenantid, deviceid):
     counter = None
     try:
@@ -3572,16 +4312,18 @@ def inc_and_get_reconciliation_failures(tenantid, deviceid):
         # Get the devices collection
         devices = db.devices
         # Find the device
-        logging.debug('Getting the device %s (tenant %s)'
-                      % (deviceid, tenantid))
+        logging.debug(
+            'Getting the device %s (tenant %s)', deviceid, tenantid
+        )
         # Build query
-        query = {'deviceid': deviceid,
-                 'tenantid': tenantid}
+        query = {
+            'deviceid': deviceid,
+            'tenantid': tenantid
+        }
         # Build the update
         update = {'$inc': {'stats.counters.reconciliation_failures': 1}}
         # Increase the tunnels counter for the device
-        device = devices.find_one_and_update(
-            query, update)
+        device = devices.find_one_and_update(query, update)
         # Return the counter
         counter = device['stats']['counters']['reconciliation_failures']
         logging.debug('Counter before the increment: %s' % counter)
@@ -3603,11 +4345,14 @@ def reset_reconciliation_failures(tenantid, deviceid):
         # Get the devices collection
         devices = db.devices
         # Find the device
-        logging.debug('Getting the device %s (tenant %s)'
-                      % (deviceid, tenantid))
+        logging.debug(
+            'Getting the device %s (tenant %s)', deviceid, tenantid
+        )
         # Build query
-        query = {'deviceid': deviceid,
-                 'tenantid': tenantid}
+        query = {
+            'deviceid': deviceid,
+            'tenantid': tenantid
+        }
         # Build the update
         update = {'$set': {'stats.counters.reconciliation_failures': 0}}
         # Reset the tunnels counter for the device

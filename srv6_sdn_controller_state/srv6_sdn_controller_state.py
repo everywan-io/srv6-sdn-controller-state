@@ -2560,7 +2560,7 @@ def get_tenantid(token):
         tenant = tenants.find_one(query, {'tenantid': 1})
         if tenant is not None:
             # Return the tenant ID
-            tenantid = tenants.get('tenantid', None)
+            tenantid = tenant.get('tenantid', None)
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the tenant ID if success,
@@ -3463,9 +3463,8 @@ def get_device_mgmtip(tenantid, deviceid):
 
 # Device authentication
 def authenticate_device(token):
-    # tenantid = get_tenantid(token)
-    # return tenantid is not None, tenantid      # TODO for the future...
-    return True, '1'
+    tenantid = get_tenantid(token)
+    return tenantid is not None, tenantid
 
 
 # Allocate and return a new VNI for the overlay

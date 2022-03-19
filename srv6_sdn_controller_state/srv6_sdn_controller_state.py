@@ -3409,7 +3409,9 @@ def release_ipv6_net(deviceid, tenantid):
                     mgmt_counters['mgmt_subnet_ipv6']['reusable_subnets']
                 )
                 # Add the mgmt IPv6 to the reusable nets list
-                reusable_nets.append(IPv6Interface(mgmtip + '/30').network)
+                reusable_nets.append(
+                    str(IPv6Interface(mgmtip + '/30').network)
+                )
                 update = {
                     '$set': {
                         'mgmt_subnet_ipv6.reusable_nets': reusable_nets

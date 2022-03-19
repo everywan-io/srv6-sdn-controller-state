@@ -3297,7 +3297,7 @@ def get_new_mgmt_ipv6_net(deviceid):
                     mgmtnet = None
             else:
                 # No reusable IPv6, allocate a new mgmt IPv6 net
-                net = IPv4Network(
+                net = IPv6Network(
                     mgmt_counters['mgmt_subnet_ipv6']['mgmt_net']
                 )
                 last_subnet_index = mgmt_counters['mgmt_subnet_ipv6'][

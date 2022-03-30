@@ -2689,6 +2689,40 @@ def tenant_exists(tenantid):
     return tenant_exists
 
 
+def get_tenant(tenantid):
+    """
+    Return the tenant if the tenant exists, None otherwise.
+
+    Parameters
+    ----------
+    tenantid : str
+        The ID of the tenant.
+
+    Returns
+    -------
+    dict
+        Tenant.
+    """
+    # Build the query
+    query = {'tenantid': tenantid}
+    tenant = None
+    try:
+        # Get a reference to the MongoDB client
+        client = get_mongodb_session()
+        # Get the database
+        db = client.EveryWan
+        # Get the tenants collection
+        tenants = db.tenants
+        # Get the tenant
+        logging.debug('Searching the tenant %s', tenantid)
+        tenant = tenants.find_one(query)
+        logging.debug('Found tenant: %s', tenant)
+    except pymongo.errors.ServerSelectionTimeoutError:
+        logging.error('Cannot establish a connection to the db')
+    # Return the tenant if the tenant exists, None otherwise
+    return tenant
+
+
 # Allocate and return a new table ID for a overlay
 def get_new_tableid(overlayid, tenantid):
     # Get a reference to the MongoDB client

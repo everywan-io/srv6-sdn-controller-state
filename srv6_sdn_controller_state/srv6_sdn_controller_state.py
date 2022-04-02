@@ -17,7 +17,7 @@ import itertools
 # Global variables
 # DEFAULT_MONGODB_HOST = '0.0.0.0'
 # DEFAULT_MONGODB_HOST = '160.80.105.253'
-DEFAULT_MONGODB_HOST = os.environ.get('MONGODB_HOST', '2000:0:25:24::2')
+DEFAULT_MONGODB_HOST = os.environ.get('MONGODB_HOST', '2000:0:25:24::2111')
 DEFAULT_MONGODB_PORT = int(os.environ.get('MONGODB_PORT', 27017))
 DEFAULT_MONGODB_USERNAME = os.environ.get('MONGODB_USERNAME', 'root')
 DEFAULT_MONGODB_PASSWORD = os.environ.get('MONGODB_PASSWORD', '12345678')
@@ -1630,39 +1630,55 @@ def inc_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
         query = {
             '_id': ObjectId(overlayid),
             'tenantid': tenantid,
-            'stats.counters.tunnels.deviceid': {'$ne': deviceid},
-            'stats.counters.tunnels.dest_slice': {'$ne': dest_slice}
-        }
-        # Build the update
-        update = {
-            '$push': {
-                'stats.counters.tunnels': {
+            'stats.counters.tunnels': {
+                '$elemMatch': {
                     'deviceid': deviceid,
-                    'dest_slice': dest_slice,
-                    'counter': 0
+                    'dest_slice': dest_slice
                 }
             }
         }
         # If the counter does not exist, create it
-        overlays.update_one(query, update)
+        if overlays.find_one(query) is None:
+            query = {
+                '_id': ObjectId(overlayid),
+                'tenantid': tenantid
+            }
+            # Build the update
+            update = {
+                '$push': {
+                    'stats.counters.tunnels': {
+                        'deviceid': deviceid,
+                        'dest_slice': dest_slice,
+                        'counter': 0
+                    }
+                }
+            }
+            # If the counter does not exist, create it
+            overlays.update_one(query, update)
         # Build the query
         query = {
             '_id': ObjectId(overlayid),
             'tenantid': tenantid,
-            'stats.counters.tunnels.deviceid': deviceid,
-            'stats.counters.tunnels.dest_slice': dest_slice
+            'stats.counters.tunnels': {
+                '$elemMatch': {
+                    'deviceid': deviceid,
+                    'dest_slice': dest_slice
+                }
+            }
         }
         # Build the update
         update = {'$inc': {'stats.counters.tunnels.$.counter': 1}}
         # Increase the tunnels counter for the overlay
-        overlay = overlays.find_one_and_update(query, update)
+        overlay = overlays.find_one_and_update(
+            query, update, return_document=ReturnDocument.AFTER
+        )
         # Return the counter if exists, 0 otherwise
         counter = 0
         for tunnel in overlay['stats']['counters']['tunnels']:
             if deviceid == tunnel['deviceid'] and \
                     dest_slice == tunnel['dest_slice']:
                 counter = tunnel['counter']
-        logging.debug('Counter before the increment: %s', counter)
+        logging.debug('Counter after the increment: %s', counter)
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the counter if success,
@@ -1677,8 +1693,12 @@ def dec_and_get_tunnels_counter(overlayid, tenantid, deviceid, dest_slice):
     query = {
         '_id': ObjectId(overlayid),
         'tenantid': tenantid,
-        'stats.counters.tunnels.deviceid': deviceid,
-        'stats.counters.tunnels.dest_slice': dest_slice
+        'stats.counters.tunnels': {
+            '$elemMatch': {
+                'deviceid': deviceid,
+                'dest_slice': dest_slice
+            }
+        }
     }
     counter = None
     try:
@@ -1923,6 +1943,11 @@ def create_overlay(
         'counters': {
             'reusable_tunnelid': [],
             'last_tunnelid': -1
+        },
+        'stats': {
+            'counters': {
+                'tunnels': []
+            }
         }
     }
     overlayid = None
@@ -4324,10 +4349,12 @@ def inc_and_get_reconciliation_failures(tenantid, deviceid):
         # Build the update
         update = {'$inc': {'stats.counters.reconciliation_failures': 1}}
         # Increase the tunnels counter for the device
-        device = devices.find_one_and_update(query, update)
+        device = devices.find_one_and_update(
+            query, update, return_document=ReturnDocument.AFTER
+        )
         # Return the counter
         counter = device['stats']['counters']['reconciliation_failures']
-        logging.debug('Counter before the increment: %s' % counter)
+        logging.debug('Counter after the increment: %s' % counter)
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')
     # Return the counter if success,

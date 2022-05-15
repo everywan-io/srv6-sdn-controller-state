@@ -304,8 +304,8 @@ def update_mgmt_info(
                 if success is not False:
                     success = True
             else:
-                logging.error('Cannot update interface')
-                success = False
+                logging.error('Cannot update interface. Skipping. Does the interface still exist?')
+                success = True
         if success:
             logging.debug('Device successfully updated')
         else:

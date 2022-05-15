@@ -1779,14 +1779,13 @@ def reset_overlay_stats(tenantid, deviceid, overlayid=None):
             tenantid
         )
         # Remove the overlay stats
-        overlays.find_one_and_update(
+        overlays.update_many(
             query,
             {
                 '$set': {
                     'stats.counters.tunnels.$.counter': 0
                 }
-            },
-            return_document=ReturnDocument.AFTER
+            }
         )
     except pymongo.errors.ServerSelectionTimeoutError:
         logging.error('Cannot establish a connection to the db')

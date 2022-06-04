@@ -17,7 +17,7 @@ import itertools
 # Global variables
 # DEFAULT_MONGODB_HOST = '0.0.0.0'
 # DEFAULT_MONGODB_HOST = '160.80.105.253'
-DEFAULT_MONGODB_HOST = os.environ.get('MONGODB_HOST', '2000:0:25:24::2111')
+DEFAULT_MONGODB_HOST = os.environ.get('MONGODB_HOST', '2000:0:25:24::2')
 DEFAULT_MONGODB_PORT = int(os.environ.get('MONGODB_PORT', 27017))
 DEFAULT_MONGODB_USERNAME = os.environ.get('MONGODB_USERNAME', 'root')
 DEFAULT_MONGODB_PASSWORD = os.environ.get('MONGODB_PASSWORD', '12345678')
@@ -304,7 +304,10 @@ def update_mgmt_info(
                 if success is not False:
                     success = True
             else:
-                logging.error('Cannot update interface. Skipping. Does the interface still exist?')
+                logging.error(
+                    'Cannot update interface. Skipping. '
+                    'Does the interface still exist?'
+                )
                 success = True
         if success:
             logging.debug('Device successfully updated')

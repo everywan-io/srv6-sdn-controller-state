@@ -1199,7 +1199,11 @@ def configure_devices(devices):
             type = interface['type']
             # Add query
             queries.append(
-                {'deviceid': deviceid, 'interfaces.name': interface_name}
+                {
+                    'deviceid': deviceid,
+                    'interfaces.name': interface_name,
+                    'tenantid': tenantid
+                }
             )
             # Add update
             updates.append(
